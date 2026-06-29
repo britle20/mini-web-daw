@@ -173,6 +173,19 @@ Do not introduce a full dashboard page for the first multi-project feature. Keep
 
 Use CSS Modules and semantic design tokens. Inline styles are not expected for this menu because geometry is not tick-derived editor layout.
 
+## Project Management Dialogs
+
+Project create, rename, and delete flows should use app-styled dialogs rather than browser-native `prompt` or `confirm`.
+
+- Open project dialogs from the transport project menu.
+- Use a compact modal or anchored dialog that matches the dark DAW UI.
+- Validate empty project names before submitting.
+- Prefer rejecting exact case-insensitive duplicate project names to keep the local project list clear.
+- Make destructive delete confirmation explicit and visibly distinct.
+- Cancel and close actions must leave project state unchanged.
+- Keep focus states visible and support keyboard submit/cancel behavior where practical.
+- Use CSS Modules and semantic design tokens; no new visual dependency is required.
+
 ## Arrangement Mixer Panel
 
 The mixer should start as a bottom dock inside `SONG` mode, below the arrangement timeline.
@@ -321,6 +334,17 @@ The left project sidebar should become the primary place to manage reusable M1 h
 - Expanded or collapsed clip groups should use `aria-expanded` when practical.
 
 Deleting a clip or pitched instrument should avoid surprising data loss. The first implementation should keep at least one clip available and should require confirmation or a documented safe fallback before deleting notes owned by a removed pitched instrument.
+
+## Clip Duplication
+
+Clip duplication belongs in the sidebar near the existing clip row controls.
+
+- Duplicating a sidebar clip creates a new reusable source clip.
+- Duplicating a source clip does not create or move arrangement clip instances.
+- Hybrid clip duplicates should be independently editable from the source clip.
+- Audio clip duplicates may share the same imported sample reference instead of copying media bytes.
+- Use a compact icon button with an accessible label such as `Duplicate CLIP 1`.
+- Duplication is non-destructive, so the first UI does not need confirmation.
 
 ## Imported Audio Clips
 

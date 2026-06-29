@@ -25,6 +25,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Arrangement scheduler event expansion from clip instances: unit tests where practical.
 - IndexedDB persistence adapters, migrations, and serialization boundaries: unit or integration tests with mocked storage where practical.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
+- Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
 - Project autosave/manual restore checks should verify that imported audio metadata and blobs remain separated.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
@@ -33,6 +34,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
 - Mixer effect state defaults, parameter clamping, and state transformations: unit tests.
+- Clip duplication transformations: unit tests for hybrid deep-copy behavior, regenerated IDs, audio clip sample reference sharing, and arrangement placement non-mutation.
 - Arrangement playback event expansion should preserve `trackId` so scheduled sources can route through the mixer.
 - Sustain loop point calculations: unit tests.
 - Sampler sustain metadata validation and fallback decisions: unit tests.
@@ -86,6 +88,7 @@ tests/unit/utils/tick-time.test.ts
 - Imported file persistence limitations across refresh.
 - IndexedDB restore behavior for imported sample metadata and blobs.
 - Multi-project active project migration and restore behavior.
+- Project create/rename/delete dialog validation and cancel behavior.
 - Autosave writing to the wrong project after a project switch.
 - Imported sample blob collisions between projects.
 - Project export/import.
@@ -94,6 +97,8 @@ tests/unit/utils/tick-time.test.ts
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
 - Mixer effect parameter clamping and migration from projects without effect slots.
+- Clip duplication source/duplicate independence.
+- Audio clip duplication sample-reference reuse without media-byte duplication.
 - Mixer effect routing interaction with track faders, mute, solo, meters, and master output.
 - Track-to-master routing during arrangement playback.
 - Runtime level meter behavior and meter decay after stop.
@@ -124,6 +129,8 @@ Manual audio checks should verify:
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
 - Imported audio clip arrangement checks should verify clear missing-source behavior after refresh until imported file persistence exists.
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
+- Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.
+- Clip duplication checks should verify duplicating hybrid and audio clips, editing duplicates without mutating sources, no automatic arrangement placement creation, and persistence after refresh.
 
 Use headphones or speakers at a safe volume. Record browser, OS, and device details when reporting audio timing issues.
 

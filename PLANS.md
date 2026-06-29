@@ -18,6 +18,8 @@ Focus:
 ## Active Issue Order
 
 1. #1 Basic mixer effects -> `docs/features/23-basic-mixer-effects.md`
+2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
+3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -49,16 +51,14 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 ## Planned Milestones
 
 1. Project JSON export/import.
-2. Custom project-management dialogs to replace browser prompt/confirm flows.
-3. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
-4. Broader manual/audio QA pass before treating the prototype as a stable release.
+2. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
+3. Broader manual/audio QA pass before treating the prototype as a stable release.
 
 ## Backlog
 
 - Keyboard shortcuts for transport and editing.
 - Basic undo and redo.
 - Velocity editing for drum and note events.
-- Clip duplication.
 - Starter project template.
 - Metronome.
 - Quantize utilities.

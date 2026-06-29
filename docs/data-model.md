@@ -182,6 +182,25 @@ The first sidebar management implementation allows a clip to have zero pitched i
 
 Deleting a pitched instrument from a clip must deliberately handle notes owned by that instrument. Prefer requiring confirmation before deleting those notes. If confirmation UI is not available, disable deletion while owned notes exist and make the reason clear.
 
+## Clip Duplication
+
+Duplicating a clip creates a new reusable source clip. It should not create or mutate arrangement `ClipInstance` objects.
+
+Hybrid clip duplication should deep-copy serializable musical content while assigning a new stable clip ID:
+
+- `lengthTicks`.
+- `drumStepSubdivision`.
+- ordered `drumLanes`.
+- `drumEvents`.
+- `pitchedInstrumentIds`.
+- `noteEvents`.
+
+Duplicated drum and note events should receive new stable IDs when event IDs are stored. If drum event IDs are deterministic, regenerate them from the duplicated clip ID, lane ID, and start tick.
+
+Audio clip duplication should create a new audio clip record with its own clip ID while sharing the same `sampleId`, source file metadata, and project-scoped imported blob record. Do not duplicate imported media bytes, decoded buffers, object URLs, or `AudioBuffer` instances.
+
+Arrangement placements remain separate. Existing `ClipInstance` records should continue to reference the original source clip unless the user explicitly places the duplicate later.
+
 ## Imported Audio Clips
 
 Imported WAV files should create audio clips that reference serializable sample metadata.
