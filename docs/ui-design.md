@@ -156,6 +156,22 @@ Arrangement export should be presented as an explicit command, likely near the e
 - Download a WAV file when export completes.
 - Do not imply MP3 or cloud export support until those features exist.
 
+## Project File Import and Export UI
+
+Project file import/export should be visually distinct from arrangement WAV export.
+
+Recommended project-level commands:
+
+- `Export Project JSON`
+- `Export Project Bundle`
+- `Import Project File`
+
+`Export Project JSON` downloads editable project data and imported sample metadata without WAV bytes. `Export Project Bundle` downloads an app-created ZIP with `project.json` and available imported WAV blobs. `Import Project File` may accept `.json` and app-created `.zip` bundles.
+
+After importing a project file, create a new browser-local project and switch to it when import succeeds. Do not silently overwrite the active project.
+
+If imported WAV bytes are missing, show a compact missing sample list. Each missing imported sample should expose a `Relink` action that opens a WAV file picker. The relink UI should explain hash mismatch failures clearly and should not create a new sample ID when the user is restoring an existing missing source.
+
 ## Project Menu
 
 Multi-project management should live in the transport bar, near the active project name and save status.

@@ -55,6 +55,10 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Persist browser-local project documents and imported sample blobs through IndexedDB.
 - Persist a browser-local project collection for create/select/rename/delete workflows.
 - Store the active project ID separately from the project document.
+- Export and import portable project JSON files.
+- Export and import app-created project bundle ZIP files that contain `project.json` plus imported WAV blobs.
+- Compute and verify imported sample content hashes for relinking and bundle validation.
+- Relink missing imported samples by attaching a validated user-selected WAV blob to an existing project-scoped `sampleId`.
 - Export rendered arrangement audio as WAV without storing runtime audio objects in project JSON.
 
 ### Utilities
@@ -95,6 +99,10 @@ Runtime data includes `AudioContext`, `AudioBuffer`, audio nodes, scheduler time
 Imported browser files are also runtime or persistence-layer data. Project JSON may reference imported audio by stable sample IDs and metadata such as file name, MIME type, and duration, but it must not embed `File`, `Blob`, object URL, or decoded PCM data.
 
 IndexedDB may store imported sample blobs or bytes outside the project JSON document. The model should reference those blobs by stable sample IDs so the audio engine can rebuild decoded runtime caches after restore.
+
+Portable project JSON exports should include imported sample `sampleId` values and metadata such as source file name, MIME type, duration, byte length, and `contentHashSha256` when available. They should not include imported WAV bytes. JSON-only imports may therefore restore imported clips as missing-source clips until the user relinks matching WAV files.
+
+Project bundle exports may include imported WAV blobs in an app-owned ZIP layout next to `project.json`. Bundle import should restore blobs into project-scoped persistence and verify their hashes when metadata is available.
 
 Each persisted project has a stable project ID. Imported sample blobs are scoped
 to the owning project with project-aware records and composite blob keys.

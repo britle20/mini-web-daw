@@ -71,6 +71,8 @@ The first implementation stores imported blobs in a project-scoped IndexedDB
 store keyed by a composite ID such as `${projectId}::${sampleId}` and also keeps
 the `projectId` on the record for deletion by project.
 
+Project file export/import should preserve sample IDs inside the exported project. If the imported project's `projectId` collides with a local project, the app may assign a new local project ID while leaving internal clip IDs and sample IDs unchanged.
+
 Switching projects should not mutate the outgoing project document except for an intentional save or autosave flush. Runtime UI selection, decoded sample caches, active source nodes, transport state, and audio preview state should be reset or rebuilt for the newly active project.
 
 ## Hybrid Clips
@@ -207,7 +209,7 @@ Imported WAV files should create audio clips that reference serializable sample 
 
 The model should keep these concepts separate:
 
-- Source media metadata: file name, MIME type, display name, duration, and stable sample ID.
+- Source media metadata: file name, MIME type, display name, duration, byte length, content hash, and stable sample ID.
 - Clip identity: the reusable audio clip shown in the sidebar.
 - Runtime media data: `File`, `Blob`, object URL, decoded `AudioBuffer`, and active source nodes.
 - Future arrangement placement: where a clip instance appears in song time and how long that instance lasts.
@@ -235,7 +237,43 @@ export interface AudioClip {
 
 `durationSeconds` describes the source media. It is acceptable here because it is not a musical event position. Arrangement positions and clip instance lengths should still use ticks.
 
+Imported sample metadata should include stable file identity fields when available. `contentHashSha256` identifies the WAV bytes, not decoded audio data.
+
+Illustrative shape:
+
+```ts
+export interface ImportedSampleSource {
+  kind: "imported";
+  fileName: string;
+  mimeType?: string;
+  byteLength?: number;
+  contentHashSha256?: string;
+}
+```
+
 Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
+
+## Project File Export and Import
+
+Project JSON export should serialize editable project data and imported sample metadata, but not imported WAV bytes.
+
+JSON-only import should:
+
+- Create a new browser-local project instead of overwriting the active project.
+- Preserve internal clip IDs, arrangement instance IDs, and sample IDs where possible.
+- Generate a new local project ID if the exported project ID collides with an existing local project.
+- Mark imported samples as missing when no blob is available.
+
+Missing imported samples can be relinked by selecting a local WAV file. The app should compute the selected file's SHA-256 hash and attach the blob to the existing project-scoped `sampleId` when the hash matches `contentHashSha256`. Filename, byte length, and duration are secondary fallback checks for older projects that do not have hash metadata.
+
+Project bundle export should produce an app-owned ZIP file with `project.json` and imported WAV blobs. Recommended entries:
+
+```text
+project.json
+samples/imported/<sampleId>.wav
+```
+
+Bundle import should restore the project document and save each bundled WAV blob under the imported project's local project ID and original `sampleId`. Bundle entries should be verified against `contentHashSha256` when available. Missing or mismatched entries should leave the relevant sample in a missing-source state rather than embedding runtime media in project JSON.
 
 ## Arrangement Clip Placement
 
@@ -586,6 +624,8 @@ export interface SampleMeta {
     path?: string;
     fileName?: string;
     mimeType?: string;
+    byteLength?: number;
+    contentHashSha256?: string;
   };
 }
 
@@ -637,3 +677,5 @@ export interface SamplerEnvelopeMeta {
 Use a runtime sample cache keyed by `sampleId` when playback needs decoded audio.
 
 After restoring an imported audio clip from IndexedDB, the app should decode the stored blob back into the audio engine runtime cache on demand, such as when previewing the clip or starting arrangement playback.
+
+After importing a JSON-only project file, imported audio clips may exist without their blobs. Runtime playback and arrangement export should report missing sample sources clearly until the user relinks matching WAV files or imports a bundle that contains those blobs.

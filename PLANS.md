@@ -20,6 +20,7 @@ Focus:
 1. #1 Basic mixer effects -> `docs/features/23-basic-mixer-effects.md`
 2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
 3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
+4. #5 Project JSON and bundle export/import -> `docs/features/26-project-json-and-bundle-export-import.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -50,9 +51,8 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 
 ## Planned Milestones
 
-1. Project JSON export/import.
-2. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
-3. Broader manual/audio QA pass before treating the prototype as a stable release.
+1. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
+2. Broader manual/audio QA pass before treating the prototype as a stable release.
 
 ## Backlog
 

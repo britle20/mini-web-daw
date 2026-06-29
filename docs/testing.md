@@ -27,6 +27,8 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
 - Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
 - Project autosave/manual restore checks should verify that imported audio metadata and blobs remain separated.
+- Project JSON and bundle import/export helpers: unit tests for serialization, project ID collision handling, sample hash metadata, missing sample detection, and app-created bundle layout where practical.
+- Imported sample relink helpers: unit tests for SHA-256 matching, mismatch rejection, and fallback metadata behavior when hashes are unavailable.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
@@ -92,6 +94,8 @@ tests/unit/utils/tick-time.test.ts
 - Autosave writing to the wrong project after a project switch.
 - Imported sample blob collisions between projects.
 - Project export/import.
+- Project bundle import/export.
+- Imported sample hash matching and relinking.
 - WAV export duration and missing-source failure behavior.
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
@@ -131,6 +135,8 @@ Manual audio checks should verify:
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
 - Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.
 - Clip duplication checks should verify duplicating hybrid and audio clips, editing duplicates without mutating sources, no automatic arrangement placement creation, and persistence after refresh.
+- Project JSON export/import checks should verify importing as a new local project, preserving clip and arrangement data, reporting missing imported WAV sources, and relinking by matching hash.
+- Project bundle export/import checks should verify app-created ZIP import, restored imported WAV playback, persistence after refresh, and clear errors for missing or hash-mismatched bundle entries.
 
 Use headphones or speakers at a safe volume. Record browser, OS, and device details when reporting audio timing issues.
 
