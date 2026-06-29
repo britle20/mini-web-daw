@@ -30,7 +30,7 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Store clip length and arrangement length as serializable musical values.
 - Store project identity and project metadata separately from runtime UI selection.
 - Provide pure transformations for creating, moving, and deleting arrangement clip instances.
-- Store serializable mixer settings such as track volume, mute, solo, and master volume when mixer routing exists.
+- Store serializable mixer settings such as track volume, mute, solo, master volume, and effect settings when mixer routing exists.
 - Avoid references to Web Audio runtime objects.
 
 ### Audio engine
@@ -102,7 +102,11 @@ Switching projects should stop live playback and preview before replacing app
 state. Autosave must write to the intended project ID and must not accidentally
 overwrite another project after a switch.
 
-Mixer settings such as volume, mute, solo, and master volume are serializable project or app-model data once real mixer routing exists. Mixer runtime data, including `GainNode`, `AnalyserNode`, effect nodes, meter buffers, and active routing graphs, belongs to the audio engine runtime and must not be stored in project JSON.
+Mixer settings such as volume, mute, solo, master volume, and effect settings
+are serializable project or app-model data once real mixer routing exists. Mixer
+runtime data, including `GainNode`, `AnalyserNode`, effect nodes, meter buffers,
+and active routing graphs, belongs to the audio engine runtime and must not be
+stored in project JSON.
 
 Arrangement placement data is serializable. A placed clip should be represented by a `ClipInstance` with stable IDs, `startTick`, `lengthTicks`, and track membership. Drag state, pointer coordinates, DOM measurements, scheduler timers, decoded buffers, and active audio nodes are runtime-only and must not be persisted.
 

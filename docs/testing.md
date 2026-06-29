@@ -32,6 +32,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Tempo control and scheduler tempo update behavior: unit tests where practical.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
+- Mixer effect state defaults, parameter clamping, and state transformations: unit tests.
 - Arrangement playback event expansion should preserve `trackId` so scheduled sources can route through the mixer.
 - Sustain loop point calculations: unit tests.
 - Sampler sustain metadata validation and fallback decisions: unit tests.
@@ -92,6 +93,8 @@ tests/unit/utils/tick-time.test.ts
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
+- Mixer effect parameter clamping and migration from projects without effect slots.
+- Mixer effect routing interaction with track faders, mute, solo, meters, and master output.
 - Track-to-master routing during arrangement playback.
 - Runtime level meter behavior and meter decay after stop.
 
@@ -115,6 +118,7 @@ Manual audio checks should verify:
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.
 - Functional mixer checks should verify track faders, master fader, mute, solo, and level meters affect real `SONG` playback.
+- Basic mixer effect checks should verify Filter, Delay, and Distortion affect only their owning track, can be bypassed, persist across refresh, and are reflected in WAV export where supported.
 - Drum subdivision settings of `1`, `2`, and `3` should toggle and play hits at the expected rhythmic positions.
 - WAV import checks should verify valid WAV import, invalid file rejection, imported clip selection, displayed duration metadata, and clear behavior after refresh when imported file persistence is not implemented.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.

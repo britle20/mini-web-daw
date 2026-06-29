@@ -140,6 +140,45 @@ The current browser engine exposes meter snapshots as normalized runtime values 
 
 The first mixer routing path applies to track-aware `SONG` arrangement events. Preview and `PAT` playback may continue using the existing direct playback path unless a later feature explicitly adds clip-editor mixer routing.
 
+## Basic Mixer Effects
+
+Basic mixer effects should extend the existing `SONG` track routing path with one
+track insert effect slot.
+
+Recommended live routing shape:
+
+```text
+scheduled source
+  -> track effect input
+  -> optional effect nodes
+  -> track gain / mute / solo stage
+  -> track meter analyser
+  -> master gain
+  -> master meter analyser
+  -> AudioContext.destination
+```
+
+The first effect set should use Web Audio-native nodes and no third-party
+runtime dependencies:
+
+- `Filter`: `BiquadFilterNode`, initially low-pass or high-pass.
+- `Delay`: `DelayNode`, feedback `GainNode`, and dry/wet gains.
+- `Distortion`: `WaveShaperNode` and dry/wet gains.
+
+React components may edit serializable effect state, but they must not create or
+own effect nodes. The audio engine should receive normalized effect settings and
+own the runtime graph. If an effect is disabled or set to `none`, the track
+should bypass effect processing and preserve the dry signal.
+
+Parameter updates during playback should update existing nodes where practical
+and avoid obvious clicks. If an implementation rebuilds a track effect graph, it
+must disconnect old runtime nodes and avoid leaving stale paths connected.
+
+Arrangement WAV export should apply equivalent effect settings so rendered audio
+matches live `SONG` playback where practical. Offline rendering may share pure
+graph-building helpers with the browser engine or build equivalent nodes in the
+offline context.
+
 ## One-shot Sample Playback
 
 Use a new `AudioBufferSourceNode` for every one-shot playback. A source node cannot be restarted after it has played.
@@ -304,5 +343,5 @@ The UI may render a vertical playhead over the piano roll or drum sequencer by c
 - Sampler instrument.
 - Synth instruments.
 - More advanced mixer routing such as pan, sends, buses, automation, and recording arm.
-- Effects hosted as audio-engine-owned Web Audio nodes.
+- More advanced effects such as reverb, multiple slots, chains, presets, and automation.
 - Offline/export rendering later.

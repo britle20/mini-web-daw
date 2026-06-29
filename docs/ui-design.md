@@ -212,7 +212,31 @@ When playback is stopped, meters may settle to zero while faders and mute/solo s
 
 Effect slots should remain visibly disabled or placeholder-only until a dedicated effects feature implements real processing.
 
-The functional mixer should label its meters as live/runtime feedback and keep effect slots disabled. The master strip exposes master volume and meter feedback; track strips expose volume, mute, solo, and meter feedback.
+Before the effects feature, the functional mixer should label its meters as live/runtime feedback and keep effect slots disabled. The master strip exposes master volume and meter feedback; track strips expose volume, mute, solo, and meter feedback.
+
+## Basic Mixer Effects UI
+
+The first effects feature should make the existing track `FX` slot functional
+without turning the mixer into a large plugin editor.
+
+Use the track channel strip effect area for:
+
+- Effect selector: `None`, `Filter`, `Delay`, `Distortion`.
+- Enable/bypass control for non-`None` effects.
+- Compact parameters for the selected effect.
+
+Suggested first controls:
+
+- `Filter`: type and cutoff.
+- `Delay`: time, feedback, and mix.
+- `Distortion`: drive and mix.
+
+Keep controls dense and readable inside the mixer strip. Avoid modal editors,
+floating plugin windows, multi-slot chains, preset browsers, and automation UI
+until separate feature specs introduce them.
+
+Effect controls edit serializable mixer state. They must not expose Web Audio
+node objects or runtime graph details to React components.
 
 ## Component Naming Recommendations
 

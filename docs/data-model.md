@@ -125,7 +125,30 @@ If a track is both muted and soloed, muted wins and the track remains silent.
 
 `GainNode`, `AnalyserNode`, effect nodes, meter buffers, and active routing graphs are runtime-only audio-engine data. Project JSON should store only settings and stable IDs. Level meter values are runtime display data and should not be persisted.
 
-Effect slots may remain UI placeholders until a basic effects feature introduces serializable effect state intentionally.
+The basic mixer effects feature should introduce one serializable track insert
+effect slot. The slot stores effect kind, enabled state, and parameter values;
+it does not store Web Audio nodes.
+
+Illustrative first effect state:
+
+```ts
+export type TrackEffectKind = "none" | "filter" | "delay" | "distortion";
+
+export interface TrackEffectState {
+  id: "track-insert-1";
+  kind: TrackEffectKind;
+  enabled: boolean;
+  parameters:
+    | FilterEffectParameters
+    | DelayEffectParameters
+    | DistortionEffectParameters
+    | null;
+}
+```
+
+Existing projects that do not have effect state should migrate to a disabled
+`none` slot. Multiple slots, effect chains, sends, automation, and presets are
+separate features.
 
 ## M1 Clip Collection and Sidebar Membership
 
