@@ -21,6 +21,8 @@ Focus:
 2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
 3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
 4. #5 Project JSON and bundle export/import -> `docs/features/26-project-json-and-bundle-export-import.md`
+5. #7 BPM-aware imported audio clip playback -> `docs/features/27-bpm-aware-imported-audio-playback.md`
+6. #6 BPM-aware imported audio stretch during WAV export -> `docs/features/28-bpm-aware-imported-audio-wav-export.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
