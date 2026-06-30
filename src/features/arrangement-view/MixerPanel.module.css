@@ -6,6 +6,7 @@
   min-height: 196px;
   min-width: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .header {
@@ -22,7 +23,14 @@
 .statusText,
 .faderLabel,
 .volumeValue,
-.masterLabel {
+.masterLabel,
+.effectSlot,
+.effectSlotSelect,
+.effectPanelButton,
+.effectPanelEyebrow,
+.effectPanelTitle,
+.effectLabel,
+.effectValue {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-label);
   letter-spacing: var(--letter-spacing-label);
@@ -82,9 +90,9 @@
   display: grid;
   gap: var(--space-gutter);
   grid-template-rows: auto minmax(0, 1fr) auto auto;
-  min-height: 190px;
+  min-height: 142px;
   padding: var(--space-gutter);
-  width: 142px;
+  width: 112px;
 }
 
 .inactiveStrip {
@@ -185,7 +193,11 @@
   min-height: 26px;
 }
 
-.toggleButton {
+.toggleButton,
+.effectSlot,
+.effectSlotSelect,
+.effectPanelButton,
+.effectPanelCloseButton {
   background: var(--color-surface-container);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-xs);
@@ -195,7 +207,13 @@
 }
 
 .toggleButton:hover,
-.toggleButton:focus-visible {
+.toggleButton:focus-visible,
+.effectSlotSelect:hover,
+.effectSlotSelect:focus-visible,
+.effectPanelButton:hover,
+.effectPanelButton:focus-visible,
+.effectPanelCloseButton:hover,
+.effectPanelCloseButton:focus-visible {
   border-color: var(--color-outline);
   color: var(--color-text);
 }
@@ -212,13 +230,86 @@
   color: var(--color-on-primary);
 }
 
-.effectControls {
-  background: var(--color-surface-container-lowest);
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-xs);
+.effectSlot {
+  overflow: hidden;
+  padding: 0 var(--space-unit);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effectSlot:disabled,
+.effectPanelButton:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.effectSlotControl {
   display: grid;
   gap: var(--space-unit);
-  padding: var(--space-unit);
+  grid-template-columns: minmax(0, 1fr) 26px;
+}
+
+.effectSlotSelect {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 var(--space-unit);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effectPanelButton {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.effectParameterPanel {
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--panel-inset-shadow);
+  display: grid;
+  gap: var(--space-gutter);
+  max-height: calc(100% - 54px);
+  overflow-y: auto;
+  padding: var(--space-gutter);
+  position: absolute;
+  right: var(--space-panel);
+  top: 46px;
+  width: 220px;
+  z-index: var(--z-index-popover);
+}
+
+.effectPanelHeader {
+  align-items: start;
+  border-bottom: 1px solid var(--color-outline-variant);
+  display: flex;
+  gap: var(--space-gutter);
+  justify-content: space-between;
+  padding-bottom: var(--space-gutter);
+}
+
+.effectPanelEyebrow,
+.effectPanelTitle {
+  margin: 0;
+}
+
+.effectPanelEyebrow,
+.effectLabel,
+.effectValue {
+  color: var(--color-text-dim);
+}
+
+.effectPanelTitle {
+  color: var(--color-primary);
+  margin-top: 2px;
+}
+
+.effectPanelCloseButton {
+  min-height: 22px;
+  min-width: 22px;
+  padding: 0;
 }
 
 .effectField {
@@ -226,15 +317,6 @@
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-
-.effectLabel,
-.effectValue {
-  color: var(--color-text-dim);
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--letter-spacing-label);
-  text-transform: uppercase;
 }
 
 .effectLabel {

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import type { MixerLevelSnapshot } from "../../audio";
 import {
@@ -68,6 +68,7 @@ export function MixerPanel({
   tracks,
   trackMixerStates,
 }: MixerPanelProps) {
+  const [openEffectTrackId, setOpenEffectTrackId] = useState<string | null>(null);
   const mixerChannels: MixerChannel[] = [
     ...tracks.map((track) => ({
       active: track.active,
@@ -86,6 +87,12 @@ export function MixerPanel({
       state: masterMixerState,
     },
   ];
+  const openEffectChannel = mixerChannels.find(
+    (channel) => channel.id === openEffectTrackId && channel.role === "track",
+  );
+  const openEffectTrackState = openEffectChannel
+    ? (openEffectChannel.state as TrackMixerState)
+    : null;
 
   return (
     <section className={styles.mixerPanel} aria-label="Arrangement mixer panel">
@@ -178,73 +185,146 @@ export function MixerPanel({
                 )}
 
                 {trackState ? (
-                  <EffectControls
+                  <EffectSlotControl
                     channelName={channel.name}
                     effectSlot={trackState.effectSlot}
-                    onEffectChange={(effectSlot) =>
-                      onTrackEffectChange(channel.id, effectSlot)
+                    isOpen={openEffectTrackId === channel.id}
+                    onEffectSelect={(effectSlot) => {
+                      onTrackEffectChange(channel.id, effectSlot);
+                      setOpenEffectTrackId(
+                        effectSlot.kind === "none" ? null : channel.id,
+                      );
+                    }}
+                    onPanelToggle={() =>
+                      setOpenEffectTrackId((currentTrackId) =>
+                        currentTrackId === channel.id ? null : channel.id,
+                      )
                     }
                   />
                 ) : (
-                  <p className={styles.masterLabel}>NO FX</p>
+                  <button
+                    aria-disabled="true"
+                    aria-label={`${channel.name} effect placeholder`}
+                    className={styles.effectSlot}
+                    disabled
+                    type="button"
+                  >
+                    FX: None
+                  </button>
                 )}
               </article>
             );
           })}
         </div>
       </div>
+
+      {openEffectChannel &&
+      openEffectTrackState &&
+      openEffectTrackState.effectSlot.kind !== "none" ? (
+        <EffectParameterPanel
+          channelName={openEffectChannel.name}
+          effectSlot={openEffectTrackState.effectSlot}
+          onClose={() => setOpenEffectTrackId(null)}
+          onEffectChange={(effectSlot) =>
+            onTrackEffectChange(openEffectChannel.id, effectSlot)
+          }
+        />
+      ) : null}
     </section>
   );
 }
 
-function EffectControls({
+function EffectSlotControl({
   channelName,
   effectSlot,
+  isOpen,
+  onEffectSelect,
+  onPanelToggle,
+}: {
+  channelName: string;
+  effectSlot: TrackEffectState;
+  isOpen: boolean;
+  onEffectSelect: (effectSlot: TrackEffectState) => void;
+  onPanelToggle: () => void;
+}) {
+  return (
+    <div className={styles.effectSlotControl}>
+      <select
+        aria-label={`${channelName} effect type`}
+        className={styles.effectSlotSelect}
+        onChange={(event) =>
+          onEffectSelect(
+            createTrackEffectState(event.currentTarget.value as TrackEffectKind),
+          )
+        }
+        value={effectSlot.kind}
+      >
+        <option value="none">FX: None</option>
+        <option value="filter">FX: Filter</option>
+        <option value="delay">FX: Delay</option>
+        <option value="distortion">FX: Distort</option>
+      </select>
+      <button
+        aria-expanded={isOpen}
+        aria-label={`Open ${channelName} effect controls`}
+        className={styles.effectPanelButton}
+        disabled={effectSlot.kind === "none"}
+        onClick={onPanelToggle}
+        type="button"
+      >
+        ...
+      </button>
+    </div>
+  );
+}
+
+function EffectParameterPanel({
+  channelName,
+  effectSlot,
+  onClose,
   onEffectChange,
 }: {
   channelName: string;
   effectSlot: TrackEffectState;
+  onClose: () => void;
   onEffectChange: (effectSlot: TrackEffectState) => void;
 }) {
   return (
-    <div className={styles.effectControls}>
-      <label className={styles.effectField}>
-        <span className={styles.effectLabel}>FX</span>
-        <select
-          aria-label={`${channelName} effect type`}
-          className={styles.effectSelect}
+    <aside
+      aria-label={`${channelName} effect controls`}
+      className={styles.effectParameterPanel}
+    >
+      <header className={styles.effectPanelHeader}>
+        <div>
+          <p className={styles.effectPanelEyebrow}>{channelName}</p>
+          <h3 className={styles.effectPanelTitle}>
+            {formatEffectKind(effectSlot.kind)}
+          </h3>
+        </div>
+        <button
+          aria-label="Close effect controls"
+          className={styles.effectPanelCloseButton}
+          onClick={onClose}
+          type="button"
+        >
+          x
+        </button>
+      </header>
+
+      <label className={styles.effectToggle}>
+        <input
+          checked={effectSlot.enabled}
           onChange={(event) =>
             onEffectChange(
-              createTrackEffectState(
-                event.currentTarget.value as TrackEffectKind,
-              ),
+              updateTrackEffectState(effectSlot, {
+                enabled: event.currentTarget.checked,
+              }),
             )
           }
-          value={effectSlot.kind}
-        >
-          <option value="none">None</option>
-          <option value="filter">Filter</option>
-          <option value="delay">Delay</option>
-          <option value="distortion">Distort</option>
-        </select>
+          type="checkbox"
+        />
+        <span>On</span>
       </label>
-
-      {effectSlot.kind !== "none" ? (
-        <label className={styles.effectToggle}>
-          <input
-            checked={effectSlot.enabled}
-            onChange={(event) =>
-              onEffectChange(
-                updateTrackEffectState(effectSlot, {
-                  enabled: event.currentTarget.checked,
-                }),
-              )
-            }
-            type="checkbox"
-          />
-          <span>On</span>
-        </label>
-      ) : null}
 
       {effectSlot.kind === "filter" ? (
         <FilterEffectControls
@@ -264,7 +344,7 @@ function EffectControls({
           onEffectChange={onEffectChange}
         />
       ) : null}
-    </div>
+    </aside>
   );
 }
 
@@ -504,4 +584,12 @@ function formatVolumeDb(volumeDb: number): string {
   }
 
   return `${volumeDb > 0 ? "+" : ""}${volumeDb.toFixed(0)} dB`;
+}
+
+function formatEffectKind(effectKind: TrackEffectKind): string {
+  if (effectKind === "distortion") {
+    return "Distort";
+  }
+
+  return effectKind[0]!.toUpperCase() + effectKind.slice(1);
 }
