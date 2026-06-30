@@ -77,18 +77,36 @@ export {
   validateImportedWavFile,
 } from "./audio-clip";
 export {
+  DELAY_MAX_FEEDBACK,
+  DELAY_MAX_TIME_SECONDS,
+  DELAY_MIN_FEEDBACK,
+  DELAY_MIN_TIME_SECONDS,
+  DISTORTION_MAX_DRIVE,
+  DISTORTION_MIN_DRIVE,
+  EFFECT_MAX_WET_MIX,
+  EFFECT_MIN_WET_MIX,
+  FILTER_MAX_FREQUENCY_HZ,
+  FILTER_MIN_FREQUENCY_HZ,
   MIXER_DEFAULT_VOLUME_DB,
   MIXER_MAX_VOLUME_DB,
   MIXER_MIN_VOLUME_DB,
+  TRACK_EFFECT_SLOT_ID,
   clampMixerVolumeDb,
   createDefaultMasterMixerState,
   createDefaultTrackMixerState,
   createDefaultTrackMixerStates,
+  createTrackEffectState,
   decibelsToLinearGain,
   getTrackEffectiveGain,
   getTrackMixerState,
   isTrackMixerAudible,
+  normalizeDelayEffectParameters,
+  normalizeDistortionEffectParameters,
+  normalizeFilterEffectParameters,
+  normalizeTrackEffectState,
+  normalizeTrackMixerState,
   updateMasterMixerState,
+  updateTrackEffectState,
   updateTrackMixerState,
 } from "./mixer";
 export {
@@ -125,7 +143,16 @@ export type {
   ImportedAudioFileLike,
   SampleMeta,
 } from "./audio-clip";
-export type { MasterMixerState, TrackMixerState } from "./mixer";
+export type {
+  DelayEffectParameters,
+  DistortionEffectParameters,
+  FilterEffectParameters,
+  FilterEffectType,
+  MasterMixerState,
+  TrackEffectKind,
+  TrackEffectState,
+  TrackMixerState,
+} from "./mixer";
 export type {
   PitchedInstrumentId,
   PitchedInstrumentMeta,

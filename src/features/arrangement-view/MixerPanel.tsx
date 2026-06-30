@@ -2,10 +2,27 @@ import type { CSSProperties } from "react";
 
 import type { MixerLevelSnapshot } from "../../audio";
 import {
+  DELAY_MAX_FEEDBACK,
+  DELAY_MAX_TIME_SECONDS,
+  DELAY_MIN_FEEDBACK,
+  DELAY_MIN_TIME_SECONDS,
+  DISTORTION_MAX_DRIVE,
+  DISTORTION_MIN_DRIVE,
+  EFFECT_MAX_WET_MIX,
+  EFFECT_MIN_WET_MIX,
+  FILTER_MAX_FREQUENCY_HZ,
+  FILTER_MIN_FREQUENCY_HZ,
   MIXER_MAX_VOLUME_DB,
   MIXER_MIN_VOLUME_DB,
+  createTrackEffectState,
   getTrackMixerState,
+  normalizeDelayEffectParameters,
+  normalizeDistortionEffectParameters,
+  normalizeFilterEffectParameters,
+  updateTrackEffectState,
   type MasterMixerState,
+  type TrackEffectKind,
+  type TrackEffectState,
   type TrackMixerState,
 } from "../../model";
 import styles from "./MixerPanel.module.css";
@@ -20,6 +37,7 @@ interface MixerPanelProps {
   masterMixerState: MasterMixerState;
   mixerLevels: MixerLevelSnapshot;
   onMasterVolumeChange: (volumeDb: number) => void;
+  onTrackEffectChange: (trackId: string, effectSlot: TrackEffectState) => void;
   onTrackMuteToggle: (trackId: string) => void;
   onTrackSoloToggle: (trackId: string) => void;
   onTrackVolumeChange: (trackId: string, volumeDb: number) => void;
@@ -43,6 +61,7 @@ export function MixerPanel({
   masterMixerState,
   mixerLevels,
   onMasterVolumeChange,
+  onTrackEffectChange,
   onTrackMuteToggle,
   onTrackSoloToggle,
   onTrackVolumeChange,
@@ -158,21 +177,306 @@ export function MixerPanel({
                   <p className={styles.masterLabel}>MASTER OUT</p>
                 )}
 
-                <button
-                  aria-disabled="true"
-                  aria-label={`${channel.name} effect placeholder`}
-                  className={styles.effectSlot}
-                  disabled
-                  type="button"
-                >
-                  FX: None
-                </button>
+                {trackState ? (
+                  <EffectControls
+                    channelName={channel.name}
+                    effectSlot={trackState.effectSlot}
+                    onEffectChange={(effectSlot) =>
+                      onTrackEffectChange(channel.id, effectSlot)
+                    }
+                  />
+                ) : (
+                  <p className={styles.masterLabel}>NO FX</p>
+                )}
               </article>
             );
           })}
         </div>
       </div>
     </section>
+  );
+}
+
+function EffectControls({
+  channelName,
+  effectSlot,
+  onEffectChange,
+}: {
+  channelName: string;
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  return (
+    <div className={styles.effectControls}>
+      <label className={styles.effectField}>
+        <span className={styles.effectLabel}>FX</span>
+        <select
+          aria-label={`${channelName} effect type`}
+          className={styles.effectSelect}
+          onChange={(event) =>
+            onEffectChange(
+              createTrackEffectState(
+                event.currentTarget.value as TrackEffectKind,
+              ),
+            )
+          }
+          value={effectSlot.kind}
+        >
+          <option value="none">None</option>
+          <option value="filter">Filter</option>
+          <option value="delay">Delay</option>
+          <option value="distortion">Distort</option>
+        </select>
+      </label>
+
+      {effectSlot.kind !== "none" ? (
+        <label className={styles.effectToggle}>
+          <input
+            checked={effectSlot.enabled}
+            onChange={(event) =>
+              onEffectChange(
+                updateTrackEffectState(effectSlot, {
+                  enabled: event.currentTarget.checked,
+                }),
+              )
+            }
+            type="checkbox"
+          />
+          <span>On</span>
+        </label>
+      ) : null}
+
+      {effectSlot.kind === "filter" ? (
+        <FilterEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+      {effectSlot.kind === "delay" ? (
+        <DelayEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+      {effectSlot.kind === "distortion" ? (
+        <DistortionEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FilterEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeFilterEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <label className={styles.effectField}>
+        <span className={styles.effectLabel}>Type</span>
+        <select
+          className={styles.effectSelect}
+          onChange={(event) =>
+            onEffectChange(
+              updateTrackEffectState(effectSlot, {
+                parameters: {
+                  ...parameters,
+                  type:
+                    event.currentTarget.value === "highpass"
+                      ? "highpass"
+                      : "lowpass",
+                },
+              }),
+            )
+          }
+          value={parameters.type}
+        >
+          <option value="lowpass">Low</option>
+          <option value="highpass">High</option>
+        </select>
+      </label>
+      <EffectRange
+        label="Cut"
+        max={FILTER_MAX_FREQUENCY_HZ}
+        min={FILTER_MIN_FREQUENCY_HZ}
+        onChange={(frequencyHz) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                frequencyHz,
+              },
+            }),
+          )
+        }
+        step={10}
+        value={parameters.frequencyHz}
+        valueLabel={`${Math.round(parameters.frequencyHz)} Hz`}
+      />
+    </>
+  );
+}
+
+function DelayEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeDelayEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <EffectRange
+        label="Time"
+        max={DELAY_MAX_TIME_SECONDS}
+        min={DELAY_MIN_TIME_SECONDS}
+        onChange={(delayTimeSeconds) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                delayTimeSeconds,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.delayTimeSeconds}
+        valueLabel={`${parameters.delayTimeSeconds.toFixed(2)}s`}
+      />
+      <EffectRange
+        label="Fbk"
+        max={DELAY_MAX_FEEDBACK}
+        min={DELAY_MIN_FEEDBACK}
+        onChange={(feedback) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                feedback,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.feedback}
+        valueLabel={`${Math.round(parameters.feedback * 100)}%`}
+      />
+      <EffectRange
+        label="Mix"
+        max={EFFECT_MAX_WET_MIX}
+        min={EFFECT_MIN_WET_MIX}
+        onChange={(wetMix) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                wetMix,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.wetMix}
+        valueLabel={`${Math.round(parameters.wetMix * 100)}%`}
+      />
+    </>
+  );
+}
+
+function DistortionEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeDistortionEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <EffectRange
+        label="Drive"
+        max={DISTORTION_MAX_DRIVE}
+        min={DISTORTION_MIN_DRIVE}
+        onChange={(drive) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                drive,
+              },
+            }),
+          )
+        }
+        step={0.1}
+        value={parameters.drive}
+        valueLabel={parameters.drive.toFixed(1)}
+      />
+      <EffectRange
+        label="Mix"
+        max={EFFECT_MAX_WET_MIX}
+        min={EFFECT_MIN_WET_MIX}
+        onChange={(wetMix) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                wetMix,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.wetMix}
+        valueLabel={`${Math.round(parameters.wetMix * 100)}%`}
+      />
+    </>
+  );
+}
+
+function EffectRange({
+  label,
+  max,
+  min,
+  onChange,
+  step,
+  value,
+  valueLabel,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  step: number;
+  value: number;
+  valueLabel: string;
+}) {
+  return (
+    <label className={styles.effectField}>
+      <span className={styles.effectLabel}>
+        {label}
+        <span className={styles.effectValue}>{valueLabel}</span>
+      </span>
+      <input
+        className={styles.effectRange}
+        max={max}
+        min={min}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        step={step}
+        type="range"
+        value={value}
+      />
+    </label>
   );
 }
 

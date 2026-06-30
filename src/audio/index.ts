@@ -1,5 +1,6 @@
 export { BrowserAudioEngine, createAudioEngine } from "./browser-audio-engine";
 export { expandClipInstancesForPlayback } from "./arrangement-events";
+export { createDistortionCurve } from "./mixer-effects";
 export { renderArrangementToWav } from "./offline-arrangement-renderer";
 export {
   encodePcm16WavArrayBuffer,

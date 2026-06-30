@@ -22,8 +22,7 @@
 .statusText,
 .faderLabel,
 .volumeValue,
-.masterLabel,
-.effectSlot {
+.masterLabel {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-label);
   letter-spacing: var(--letter-spacing-label);
@@ -83,9 +82,9 @@
   display: grid;
   gap: var(--space-gutter);
   grid-template-rows: auto minmax(0, 1fr) auto auto;
-  min-height: 142px;
+  min-height: 190px;
   padding: var(--space-gutter);
-  width: 112px;
+  width: 142px;
 }
 
 .inactiveStrip {
@@ -186,8 +185,7 @@
   min-height: 26px;
 }
 
-.toggleButton,
-.effectSlot {
+.toggleButton {
   background: var(--color-surface-container);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-xs);
@@ -197,9 +195,7 @@
 }
 
 .toggleButton:hover,
-.toggleButton:focus-visible,
-.effectSlot:hover,
-.effectSlot:focus-visible {
+.toggleButton:focus-visible {
   border-color: var(--color-outline);
   color: var(--color-text);
 }
@@ -216,14 +212,75 @@
   color: var(--color-on-primary);
 }
 
-.effectSlot {
-  overflow: hidden;
-  padding: 0 var(--space-unit);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.effectControls {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-xs);
+  display: grid;
+  gap: var(--space-unit);
+  padding: var(--space-unit);
 }
 
-.effectSlot:disabled {
-  cursor: default;
-  opacity: 0.7;
+.effectField {
+  color: var(--color-text-muted);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.effectLabel,
+.effectValue {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
+}
+
+.effectLabel {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.effectValue {
+  color: var(--color-primary);
+}
+
+.effectSelect,
+.effectRange {
+  accent-color: var(--color-primary);
+}
+
+.effectSelect {
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-xs);
+  color: var(--color-text);
+  font: inherit;
+  min-height: 22px;
+  min-width: 0;
+  padding: 0 var(--space-unit);
+}
+
+.effectSelect:focus-visible,
+.effectRange:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.effectRange {
+  cursor: pointer;
+  width: 100%;
+}
+
+.effectToggle {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  gap: var(--space-unit);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
 }

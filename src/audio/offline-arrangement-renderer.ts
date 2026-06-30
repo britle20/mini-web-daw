@@ -1,6 +1,7 @@
 import { BUNDLED_SAMPLES } from "./bundled-samples";
 import { decodeAudioBuffer } from "./audio-buffer-decoder";
 import { expandClipInstancesForPlayback } from "./arrangement-events";
+import { connectMixerEffectGraph } from "./mixer-effects";
 import {
   resolveSamplerPlaybackPlan,
 } from "./sampler-sustain";
@@ -20,6 +21,7 @@ import {
   getSampleZoneForMidiNote,
   getTrackEffectiveGain,
   getTrackMixerState,
+  normalizeTrackMixerState,
   type Clip,
   type ClipInstance,
   type MasterMixerState,
@@ -272,9 +274,9 @@ function scheduleOfflineSampleEvent({
     ...mixerOptions,
     trackId: event.trackId,
   });
-  const gainValue = DEFAULT_SAMPLE_GAIN * (event.gain ?? 1) * mixerGain;
+  const gainValue = DEFAULT_SAMPLE_GAIN * (event.gain ?? 1);
 
-  if (gainValue <= 0 || sourceOffsetSeconds >= audioBuffer.duration) {
+  if (gainValue <= 0 || mixerGain <= 0 || sourceOffsetSeconds >= audioBuffer.duration) {
     return;
   }
 
@@ -300,7 +302,13 @@ function scheduleOfflineSampleEvent({
   sourceNode.buffer = audioBuffer;
   gainNode.gain.value = gainValue;
   sourceNode.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  connectOfflineMixerRoute({
+    audioContext,
+    mixerGain,
+    mixerOptions,
+    sourceOutputNode: gainNode,
+    trackId: event.trackId,
+  });
 
   if (event.durationTicks === undefined) {
     sourceNode.start(startSeconds, sourceOffsetSeconds);
@@ -401,13 +409,13 @@ function scheduleOfflineSynthNote({
   );
   const gainValue =
     DEFAULT_SYNTH_GAIN *
-    (event.gain ?? 1) *
-    getMixerGain({
-      ...mixerOptions,
-      trackId: event.trackId,
-    });
+    (event.gain ?? 1);
+  const mixerGain = getMixerGain({
+    ...mixerOptions,
+    trackId: event.trackId,
+  });
 
-  if (gainValue <= 0) {
+  if (gainValue <= 0 || mixerGain <= 0) {
     return;
   }
 
@@ -424,7 +432,13 @@ function scheduleOfflineSynthNote({
   gainNode.gain.setValueAtTime(gainValue, sustainEndTime);
   gainNode.gain.linearRampToValueAtTime(0, stopTime);
   sourceNode.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  connectOfflineMixerRoute({
+    audioContext,
+    mixerGain,
+    mixerOptions,
+    sourceOutputNode: gainNode,
+    trackId: event.trackId,
+  });
   sourceNode.start(startTime);
   sourceNode.stop(stopTime);
 }
@@ -488,13 +502,13 @@ function scheduleOfflineSampledNote({
   );
   const gainValue =
     DEFAULT_SAMPLER_GAIN *
-    (event.gain ?? 1) *
-    getMixerGain({
-      ...mixerOptions,
-      trackId: event.trackId,
-    });
+    (event.gain ?? 1);
+  const mixerGain = getMixerGain({
+    ...mixerOptions,
+    trackId: event.trackId,
+  });
 
-  if (gainValue <= 0) {
+  if (gainValue <= 0 || mixerGain <= 0) {
     return;
   }
 
@@ -515,7 +529,13 @@ function scheduleOfflineSampledNote({
   gainNode.gain.setValueAtTime(gainValue, sustainEndTime);
   gainNode.gain.linearRampToValueAtTime(0, stopTime);
   sourceNode.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  connectOfflineMixerRoute({
+    audioContext,
+    mixerGain,
+    mixerOptions,
+    sourceOutputNode: gainNode,
+    trackId: event.trackId,
+  });
   sourceNode.start(startTime, playbackPlan.sampleOffsetSeconds);
   sourceNode.stop(stopTime);
 }
@@ -547,6 +567,49 @@ function getMixerGain({
       trackState,
     })
   );
+}
+
+function connectOfflineMixerRoute({
+  audioContext,
+  mixerGain,
+  mixerOptions,
+  sourceOutputNode,
+  trackId,
+}: {
+  audioContext: OfflineAudioContext;
+  mixerGain: number;
+  mixerOptions: MixerGainOptions;
+  sourceOutputNode: AudioNode;
+  trackId?: string;
+}): void {
+  if (mixerGain <= 0) {
+    return;
+  }
+
+  const mixerGainNode = audioContext.createGain();
+
+  mixerGainNode.gain.value = mixerGain;
+
+  if (!trackId) {
+    sourceOutputNode.connect(mixerGainNode);
+    mixerGainNode.connect(audioContext.destination);
+    return;
+  }
+
+  const trackState = normalizeTrackMixerState(
+    getTrackMixerState(mixerOptions.trackMixerStates, trackId),
+    trackId,
+  );
+  const effectInputNode = audioContext.createGain();
+
+  sourceOutputNode.connect(effectInputNode);
+  connectMixerEffectGraph({
+    audioContext,
+    effectSlot: trackState.effectSlot,
+    inputNode: effectInputNode,
+    outputNode: mixerGainNode,
+  });
+  mixerGainNode.connect(audioContext.destination);
 }
 
 function getSampleZoneForNoteEvent(event: NoteLoopEvent): SampleZone | null {

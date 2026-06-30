@@ -18,6 +18,7 @@ import {
   type ClipInstance,
   isAudioClip,
   type MasterMixerState,
+  type TrackEffectState,
   type TrackMixerState,
 } from "../../model";
 import { TICKS_PER_4_4_BAR, type Tick } from "../../utils";
@@ -57,6 +58,7 @@ interface ArrangementViewProps {
   onClipInstanceSelect: (instanceId: string) => void;
   onLoopRangeChange: (loopRange: ArrangementLoopRange) => void;
   onMasterVolumeChange: (volumeDb: number) => void;
+  onTrackEffectChange: (trackId: string, effectSlot: TrackEffectState) => void;
   onTrackMuteToggle: (trackId: string) => void;
   onTrackSoloToggle: (trackId: string) => void;
   onTrackVolumeChange: (trackId: string, volumeDb: number) => void;
@@ -86,6 +88,7 @@ export function ArrangementView({
   onClipInstanceSelect,
   onLoopRangeChange,
   onMasterVolumeChange,
+  onTrackEffectChange,
   onTrackMuteToggle,
   onTrackSoloToggle,
   onTrackVolumeChange,
@@ -439,6 +442,7 @@ export function ArrangementView({
         masterMixerState={masterMixerState}
         mixerLevels={mixerLevels}
         onMasterVolumeChange={onMasterVolumeChange}
+        onTrackEffectChange={onTrackEffectChange}
         onTrackMuteToggle={onTrackMuteToggle}
         onTrackSoloToggle={onTrackSoloToggle}
         onTrackVolumeChange={onTrackVolumeChange}

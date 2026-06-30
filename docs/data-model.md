@@ -105,6 +105,7 @@ export interface TrackMixerState {
   volumeDb: number;
   muted: boolean;
   solo: boolean;
+  effectSlot: TrackEffectState;
 }
 
 export interface MasterMixerState {
@@ -644,10 +645,41 @@ export interface TrackMixerState {
   volumeDb: number;
   muted: boolean;
   solo: boolean;
+  effectSlot: TrackEffectState;
 }
 
 export interface MasterMixerState {
   volumeDb: number;
+}
+
+export type TrackEffectKind = "none" | "filter" | "delay" | "distortion";
+
+export interface TrackEffectState {
+  id: "track-insert-1";
+  kind: TrackEffectKind;
+  enabled: boolean;
+  parameters:
+    | FilterEffectParameters
+    | DelayEffectParameters
+    | DistortionEffectParameters
+    | null;
+}
+
+export interface FilterEffectParameters {
+  type: "lowpass" | "highpass";
+  frequencyHz: number;
+  q: number;
+}
+
+export interface DelayEffectParameters {
+  delayTimeSeconds: number;
+  feedback: number;
+  wetMix: number;
+}
+
+export interface DistortionEffectParameters {
+  drive: number;
+  wetMix: number;
 }
 
 export interface PitchedInstrumentMeta {

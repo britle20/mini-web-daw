@@ -4,6 +4,7 @@ import {
   MIXER_DEFAULT_VOLUME_DB,
   MIXER_MAX_VOLUME_DB,
   MIXER_MIN_VOLUME_DB,
+  createTrackEffectState,
   clampMixerVolumeDb,
   createDefaultMasterMixerState,
   createDefaultTrackMixerState,
@@ -12,6 +13,12 @@ import {
   getTrackEffectiveGain,
   getTrackMixerState,
   isTrackMixerAudible,
+  normalizeDelayEffectParameters,
+  normalizeDistortionEffectParameters,
+  normalizeFilterEffectParameters,
+  normalizeTrackEffectState,
+  normalizeTrackMixerState,
+  updateTrackEffectState,
   updateMasterMixerState,
   updateTrackMixerState,
 } from "../../../src/model";
@@ -19,6 +26,7 @@ import {
 describe("mixer model", () => {
   it("creates serializable default mixer states", () => {
     expect(createDefaultTrackMixerState("track-1")).toEqual({
+      effectSlot: createTrackEffectState("none"),
       muted: false,
       solo: false,
       trackId: "track-1",
@@ -31,12 +39,14 @@ describe("mixer model", () => {
       ]),
     ).toEqual([
       {
+        effectSlot: createTrackEffectState("none"),
         muted: false,
         solo: false,
         trackId: "track-1",
         volumeDb: 0,
       },
       {
+        effectSlot: createTrackEffectState("none"),
         muted: false,
         solo: false,
         trackId: "track-2",
@@ -64,6 +74,7 @@ describe("mixer model", () => {
 
     expect(initialStates[0]).toEqual(createDefaultTrackMixerState("track-1"));
     expect(nextStates[0]).toMatchObject({
+      effectSlot: createTrackEffectState("none"),
       muted: true,
       trackId: "track-1",
       volumeDb: -12,
@@ -75,6 +86,7 @@ describe("mixer model", () => {
       }),
     ).toEqual([
       {
+        effectSlot: createTrackEffectState("none"),
         muted: false,
         solo: true,
         trackId: "track-2",
@@ -128,6 +140,87 @@ describe("mixer model", () => {
   it("returns a default track mixer state for missing tracks", () => {
     expect(getTrackMixerState([], "track-99")).toEqual(
       createDefaultTrackMixerState("track-99"),
+    );
+  });
+
+  it("creates and updates serializable track effect state", () => {
+    expect(createTrackEffectState("none")).toEqual({
+      enabled: false,
+      id: "track-insert-1",
+      kind: "none",
+      parameters: null,
+    });
+    expect(createTrackEffectState("filter")).toMatchObject({
+      enabled: true,
+      id: "track-insert-1",
+      kind: "filter",
+      parameters: {
+        frequencyHz: 2400,
+        q: 0.7,
+        type: "lowpass",
+      },
+    });
+
+    const delay = createTrackEffectState("delay");
+    const disabledDelay = updateTrackEffectState(delay, { enabled: false });
+
+    expect(disabledDelay).toMatchObject({
+      enabled: false,
+      kind: "delay",
+    });
+  });
+
+  it("normalizes unsafe effect parameters to supported ranges", () => {
+    expect(
+      normalizeFilterEffectParameters({
+        frequencyHz: 99_999,
+        q: -1,
+        type: "highpass",
+      }),
+    ).toEqual({
+      frequencyHz: 12_000,
+      q: 0.1,
+      type: "highpass",
+    });
+    expect(
+      normalizeDelayEffectParameters({
+        delayTimeSeconds: 10,
+        feedback: 2,
+        wetMix: -1,
+      }),
+    ).toEqual({
+      delayTimeSeconds: 1,
+      feedback: 0.72,
+      wetMix: 0,
+    });
+    expect(
+      normalizeDistortionEffectParameters({
+        drive: Number.NaN,
+        wetMix: 2,
+      }),
+    ).toEqual({
+      drive: 4,
+      wetMix: 1,
+    });
+  });
+
+  it("normalizes older mixer states without effect slots", () => {
+    expect(
+      normalizeTrackMixerState({
+        muted: true,
+        solo: false,
+        trackId: "track-1",
+        volumeDb: -12,
+      }),
+    ).toEqual({
+      effectSlot: createTrackEffectState("none"),
+      muted: true,
+      solo: false,
+      trackId: "track-1",
+      volumeDb: -12,
+    });
+    expect(normalizeTrackEffectState({ kind: "unknown" })).toEqual(
+      createTrackEffectState("none"),
     );
   });
 });

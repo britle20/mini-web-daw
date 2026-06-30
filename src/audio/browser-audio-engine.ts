@@ -1,6 +1,7 @@
 import { BUNDLED_SAMPLES } from "./bundled-samples";
 import { decodeAudioBuffer } from "./audio-buffer-decoder";
 import { LookaheadScheduler } from "./lookahead-scheduler";
+import { connectMixerEffectGraph } from "./mixer-effects";
 import {
   resolveSamplerPlaybackPlan,
   resolveSamplerVoiceRelease,
@@ -25,6 +26,7 @@ import {
   decibelsToLinearGain,
   getTrackEffectiveGain,
   getTrackMixerState,
+  normalizeTrackMixerState,
   type MasterMixerState,
   type SampleZone,
   type TrackId,
@@ -62,7 +64,9 @@ interface ActiveSamplePreview {
 
 interface MixerRoute {
   analyserNode: AnalyserNode;
+  effectNodes: AudioNode[];
   gainNode: GainNode;
+  inputNode: GainNode;
   meterBuffer: Uint8Array<ArrayBuffer>;
 }
 
@@ -162,10 +166,13 @@ export class BrowserAudioEngine implements AudioEngine {
     this.trackMixerStatesById.clear();
 
     for (const state of states) {
-      this.trackMixerStatesById.set(state.trackId, { ...state });
+      const normalizedState = normalizeTrackMixerState(state);
+
+      this.trackMixerStatesById.set(normalizedState.trackId, normalizedState);
     }
 
     this.applyTrackMixerGains();
+    this.applyTrackMixerEffects();
   }
 
   async loadSample(sampleId: SampleId): Promise<AudioBuffer> {
@@ -804,7 +811,7 @@ export class BrowserAudioEngine implements AudioEngine {
       return;
     }
 
-    gainNode.connect(this.getOrCreateTrackRoute(trackId).gainNode);
+    gainNode.connect(this.getOrCreateTrackRoute(trackId).inputNode);
   }
 
   private getOrCreateTrackRoute(trackId: TrackId): MixerRoute {
@@ -820,6 +827,7 @@ export class BrowserAudioEngine implements AudioEngine {
     route.analyserNode.connect(this.getOrCreateMasterRoute().gainNode);
     this.trackRoutes.set(trackId, route);
     this.applyTrackMixerGains();
+    this.applyTrackMixerEffect(trackId, route);
 
     return route;
   }
@@ -861,6 +869,32 @@ export class BrowserAudioEngine implements AudioEngine {
       });
     }
   }
+
+  private applyTrackMixerEffects(): void {
+    for (const [trackId, route] of this.trackRoutes) {
+      this.applyTrackMixerEffect(trackId, route);
+    }
+  }
+
+  private applyTrackMixerEffect(trackId: TrackId, route: MixerRoute): void {
+    const audioContext = this.getOrCreateAudioContext();
+    const trackState = getTrackMixerState(
+      Array.from(this.trackMixerStatesById.values()),
+      trackId,
+    );
+
+    disconnectAudioNode(route.inputNode);
+    for (const effectNode of route.effectNodes) {
+      disconnectAudioNode(effectNode);
+    }
+
+    route.effectNodes = connectMixerEffectGraph({
+      audioContext,
+      effectSlot: trackState.effectSlot,
+      inputNode: route.inputNode,
+      outputNode: route.gainNode,
+    });
+  }
 }
 
 function createClipLoopEvents({
@@ -899,15 +933,19 @@ function disconnectAudioNode(audioNode: AudioNode): void {
 }
 
 function createMixerRoute(audioContext: AudioContext): MixerRoute {
+  const inputNode = audioContext.createGain();
   const gainNode = audioContext.createGain();
   const analyserNode = audioContext.createAnalyser();
 
   analyserNode.fftSize = 256;
+  inputNode.connect(gainNode);
   gainNode.connect(analyserNode);
 
   return {
     analyserNode,
+    effectNodes: [],
     gainNode,
+    inputNode,
     meterBuffer: new Uint8Array(new ArrayBuffer(analyserNode.fftSize)),
   };
 }
