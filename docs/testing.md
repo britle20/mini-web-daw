@@ -25,13 +25,21 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Arrangement scheduler event expansion from clip instances: unit tests where practical.
 - IndexedDB persistence adapters, migrations, and serialization boundaries: unit or integration tests with mocked storage where practical.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
+- Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
 - Project autosave/manual restore checks should verify that imported audio metadata and blobs remain separated.
+- Project JSON and bundle import/export helpers: unit tests for serialization, project ID collision handling, sample hash metadata, missing sample detection, and app-created bundle layout where practical.
+- Imported sample relink helpers: unit tests for SHA-256 matching, mismatch rejection, and fallback metadata behavior when hashes are unavailable.
+- Imported audio source BPM validation and stretch-rate helpers: unit tests.
+- BPM-aware imported audio scheduler planning: unit tests where practical.
+- BPM-aware imported audio export planning and missing-metadata errors: unit tests where practical.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
 - Tempo control and scheduler tempo update behavior: unit tests where practical.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
+- Mixer effect state defaults, parameter clamping, and state transformations: unit tests.
+- Clip duplication transformations: unit tests for hybrid deep-copy behavior, regenerated IDs, audio clip sample reference sharing, and arrangement placement non-mutation.
 - Arrangement playback event expansion should preserve `trackId` so scheduled sources can route through the mixer.
 - Sustain loop point calculations: unit tests.
 - Sampler sustain metadata validation and fallback decisions: unit tests.
@@ -82,16 +90,27 @@ tests/unit/utils/tick-time.test.ts
 - Clip duplication.
 - Sample import.
 - Imported audio clip metadata and runtime-cache separation.
+- Imported audio source BPM validation and missing-BPM behavior.
+- Imported audio stretch-rate calculation from project BPM and source BPM.
+- Imported audio stretch startup reliability and retry behavior.
 - Imported file persistence limitations across refresh.
 - IndexedDB restore behavior for imported sample metadata and blobs.
 - Multi-project active project migration and restore behavior.
+- Project create/rename/delete dialog validation and cancel behavior.
 - Autosave writing to the wrong project after a project switch.
 - Imported sample blob collisions between projects.
 - Project export/import.
+- Project bundle import/export.
+- Imported sample hash matching and relinking.
 - WAV export duration and missing-source failure behavior.
+- WAV export behavior for BPM-aware imported audio clips.
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
+- Mixer effect parameter clamping and migration from projects without effect slots.
+- Clip duplication source/duplicate independence.
+- Audio clip duplication sample-reference reuse without media-byte duplication.
+- Mixer effect routing interaction with track faders, mute, solo, meters, and master output.
 - Track-to-master routing during arrangement playback.
 - Runtime level meter behavior and meter decay after stop.
 
@@ -115,11 +134,18 @@ Manual audio checks should verify:
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.
 - Functional mixer checks should verify track faders, master fader, mute, solo, and level meters affect real `SONG` playback.
+- Basic mixer effect checks should verify Filter, Delay, and Distortion affect only their owning track, can be bypassed, persist across refresh, and are reflected in WAV export where supported.
 - Drum subdivision settings of `1`, `2`, and `3` should toggle and play hits at the expected rhythmic positions.
 - WAV import checks should verify valid WAV import, invalid file rejection, imported clip selection, displayed duration metadata, and clear behavior after refresh when imported file persistence is not implemented.
+- BPM-aware imported audio checks should verify source BPM input, equal-BPM unchanged playback, higher/lower project BPM stretch, pitch preservation, and next-playback-only behavior after BPM changes.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
 - Imported audio clip arrangement checks should verify clear missing-source behavior after refresh until imported file persistence exists.
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
+- Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.
+- Clip duplication checks should verify duplicating hybrid and audio clips, editing duplicates without mutating sources, no automatic arrangement placement creation, and persistence after refresh.
+- Project JSON export/import checks should verify importing as a new local project, preserving clip and arrangement data, reporting missing imported WAV sources, and relinking by matching hash.
+- Project bundle export/import checks should verify app-created ZIP import, restored imported WAV playback, persistence after refresh, and clear errors for missing or hash-mismatched bundle entries.
+- BPM-aware imported audio export checks should verify exported imported WAV clips match live tempo-synced playback and fail clearly when source BPM or imported bytes are missing.
 
 Use headphones or speakers at a safe volume. Record browser, OS, and device details when reporting audio timing issues.
 

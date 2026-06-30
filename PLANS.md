@@ -4,20 +4,25 @@
 
 Create a browser-first, clip-oriented mini DAW that is useful for making electronic music. The app should favor correct timing, serializable project data, and focused workflows over broad full-DAW scope.
 
-## Current Milestone: Develop to Main Stabilization
+## Current Milestone: Basic Mixer Effects
 
-The current branch is being prepared for a `develop` to `main` PR. The goal is to make the repository easy to understand, verify, and review at its current prototype stage.
+The current next feature is the first real track-level effects pass for the `SONG` arrangement mixer.
 
 Focus:
 
-- Keep README, plans, and feature docs aligned with the implemented state.
-- Keep the GitHub Issue queue and `Active Issue Order` clean.
-- Verify the standard checks pass before opening release-prep PRs.
-- Avoid adding new product scope during stabilization unless the user explicitly asks for it.
+- Replace the mixer `FX: None` placeholder with one functional insert effect slot per track.
+- Start with a small Web Audio-native effect set: Filter, Delay, and Distortion.
+- Keep effect settings serializable and runtime Web Audio nodes out of project JSON.
+- Keep live `SONG` playback and arrangement WAV export behavior aligned where practical.
 
 ## Active Issue Order
 
-No active implementation issues are queued right now.
+1. #1 Basic mixer effects -> `docs/features/23-basic-mixer-effects.md`
+2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
+3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
+4. #5 Project JSON and bundle export/import -> `docs/features/26-project-json-and-bundle-export-import.md`
+5. #7 BPM-aware imported audio clip playback -> `docs/features/27-bpm-aware-imported-audio-playback.md`
+6. #6 BPM-aware imported audio stretch during WAV export -> `docs/features/28-bpm-aware-imported-audio-wav-export.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -48,18 +53,14 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 
 ## Planned Milestones
 
-1. Project JSON export/import.
-2. Basic effects.
-3. Custom project-management dialogs to replace browser prompt/confirm flows.
-4. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
-5. Broader manual/audio QA pass before treating the prototype as a stable release.
+1. Browser-driven smoke tests with Playwright or an equivalent e2e tool.
+2. Broader manual/audio QA pass before treating the prototype as a stable release.
 
 ## Backlog
 
 - Keyboard shortcuts for transport and editing.
 - Basic undo and redo.
 - Velocity editing for drum and note events.
-- Clip duplication.
 - Starter project template.
 - Metronome.
 - Quantize utilities.

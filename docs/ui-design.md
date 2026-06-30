@@ -156,6 +156,22 @@ Arrangement export should be presented as an explicit command, likely near the e
 - Download a WAV file when export completes.
 - Do not imply MP3 or cloud export support until those features exist.
 
+## Project File Import and Export UI
+
+Project file import/export should be visually distinct from arrangement WAV export.
+
+Recommended project-level commands:
+
+- `Export Project JSON`
+- `Export Project Bundle`
+- `Import Project File`
+
+`Export Project JSON` downloads editable project data and imported sample metadata without WAV bytes. `Export Project Bundle` downloads an app-created ZIP with `project.json` and available imported WAV blobs. `Import Project File` may accept `.json` and app-created `.zip` bundles.
+
+After importing a project file, create a new browser-local project and switch to it when import succeeds. Do not silently overwrite the active project.
+
+If imported WAV bytes are missing, show a compact missing sample list. Each missing imported sample should expose a `Relink` action that opens a WAV file picker. The relink UI should explain hash mismatch failures clearly and should not create a new sample ID when the user is restoring an existing missing source.
+
 ## Project Menu
 
 Multi-project management should live in the transport bar, near the active project name and save status.
@@ -172,6 +188,19 @@ The first project menu should:
 Do not introduce a full dashboard page for the first multi-project feature. Keep the menu compact enough to fit the editor-focused workflow.
 
 Use CSS Modules and semantic design tokens. Inline styles are not expected for this menu because geometry is not tick-derived editor layout.
+
+## Project Management Dialogs
+
+Project create, rename, and delete flows should use app-styled dialogs rather than browser-native `prompt` or `confirm`.
+
+- Open project dialogs from the transport project menu.
+- Use a compact modal or anchored dialog that matches the dark DAW UI.
+- Validate empty project names before submitting.
+- Prefer rejecting exact case-insensitive duplicate project names to keep the local project list clear.
+- Make destructive delete confirmation explicit and visibly distinct.
+- Cancel and close actions must leave project state unchanged.
+- Keep focus states visible and support keyboard submit/cancel behavior where practical.
+- Use CSS Modules and semantic design tokens; no new visual dependency is required.
 
 ## Arrangement Mixer Panel
 
@@ -212,7 +241,31 @@ When playback is stopped, meters may settle to zero while faders and mute/solo s
 
 Effect slots should remain visibly disabled or placeholder-only until a dedicated effects feature implements real processing.
 
-The functional mixer should label its meters as live/runtime feedback and keep effect slots disabled. The master strip exposes master volume and meter feedback; track strips expose volume, mute, solo, and meter feedback.
+Before the effects feature, the functional mixer should label its meters as live/runtime feedback and keep effect slots disabled. The master strip exposes master volume and meter feedback; track strips expose volume, mute, solo, and meter feedback.
+
+## Basic Mixer Effects UI
+
+The first effects feature should make the existing track `FX` slot functional
+without turning the mixer into a large plugin editor.
+
+Use the track channel strip effect area for:
+
+- Effect selector: `None`, `Filter`, `Delay`, `Distortion`.
+- Enable/bypass control for non-`None` effects.
+- Compact parameters for the selected effect.
+
+Suggested first controls:
+
+- `Filter`: type and cutoff.
+- `Delay`: time, feedback, and mix.
+- `Distortion`: drive and mix.
+
+Keep controls dense and readable inside the mixer strip. Avoid modal editors,
+floating plugin windows, multi-slot chains, preset browsers, and automation UI
+until separate feature specs introduce them.
+
+Effect controls edit serializable mixer state. They must not expose Web Audio
+node objects or runtime graph details to React components.
 
 ## Component Naming Recommendations
 
@@ -297,6 +350,17 @@ The left project sidebar should become the primary place to manage reusable M1 h
 - Expanded or collapsed clip groups should use `aria-expanded` when practical.
 
 Deleting a clip or pitched instrument should avoid surprising data loss. The first implementation should keep at least one clip available and should require confirmation or a documented safe fallback before deleting notes owned by a removed pitched instrument.
+
+## Clip Duplication
+
+Clip duplication belongs in the sidebar near the existing clip row controls.
+
+- Duplicating a sidebar clip creates a new reusable source clip.
+- Duplicating a source clip does not create or move arrangement clip instances.
+- Hybrid clip duplicates should be independently editable from the source clip.
+- Audio clip duplicates may share the same imported sample reference instead of copying media bytes.
+- Use a compact icon button with an accessible label such as `Duplicate CLIP 1`.
+- Duplication is non-destructive, so the first UI does not need confirmation.
 
 ## Imported Audio Clips
 

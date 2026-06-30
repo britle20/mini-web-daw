@@ -51,6 +51,16 @@ The first imported WAV implementation may support a simple preview or clip playb
 
 Imported audio clip duration is source media duration in seconds. Future arrangement placement should convert arrangement positions and visible instance lengths to ticks, while source offsets remain sample-local seconds. Without a time-stretching feature, resizing an audio clip instance should trim/crop playback or extend silence rather than stretch the audio to a new musical duration.
 
+BPM-aware imported audio playback is a later feature. It should require source BPM metadata for newly imported WAV files and derive stretch rate from:
+
+```text
+stretchRate = projectBpm / sourceBpm
+```
+
+The stretch path should preserve pitch and live inside the audio engine or a narrow audio adapter. If `signalsmith-stretch` is used as a production dependency, keep it behind a typed audio-engine API and document the dependency in the PR. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound, but startup should use a conservative schedule lead time or retry behavior because very tight start scheduling can fail to advance.
+
+Project BPM changes should apply to imported audio stretch on the next playback start. Do not attempt live stretch-ratio changes for already-playing imported audio in the first implementation.
+
 ## Arrangement Playback
 
 `PAT` mode playback targets the selected clip editor. `SONG` mode playback should target placed `ClipInstance` objects on the arrangement timeline.
@@ -71,7 +81,9 @@ The current first pass reuses the existing lookahead loop scheduler for `SONG` m
 
 The arrangement view may set loop start and loop end at bar boundaries. `SONG` playback should pass those ticks as the scheduler `loopStartTick` and `loopEndTick`. Selecting clips or instruments in the sidebar while `SONG` mode is playing must not replace the active arrangement scheduler with selected-clip `PAT` events.
 
-Imported audio clips should play at original speed unless a later time-stretching feature explicitly changes that behavior. If an audio clip instance is shorter than the source buffer, playback should be cropped. If the instance is longer than the source buffer, playback may end naturally and leave silence. If runtime file data is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
+Imported audio clips should play at original speed unless a time-stretching feature explicitly changes that behavior. If an audio clip instance is shorter than the source buffer, playback should be cropped. If the instance is longer than the source buffer, playback may end naturally and leave silence. If runtime file data is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
+
+When BPM-aware imported audio playback exists, `SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
 
 Arrangement playback still uses the lookahead scheduler. UI drag state, arrangement DOM geometry, visual playheads, decoded buffers, and active source nodes remain runtime-only.
 
@@ -91,6 +103,8 @@ The current first export pass:
 - Avoids mutating live transport state, active source nodes, or decoded runtime caches during rendering.
 
 WAV encoding can be a small utility that converts rendered PCM into a Blob. MP3, FLAC, stem export, cloud export, and mastering processors are separate features.
+
+If live imported audio playback becomes BPM-aware, offline WAV export should be updated separately to match it. Do not silently fall back to unstretched imported audio when the user expects tempo-synced export. The export path must verify that the chosen stretch implementation works with `OfflineAudioContext` or provide a clear unsupported-state error until a working offline adapter exists.
 
 ## Mixer Routing
 
@@ -139,6 +153,45 @@ Level meters are display feedback only. The UI may poll meter snapshots with `re
 The current browser engine exposes meter snapshots as normalized runtime values from track and master `AnalyserNode` instances. These snapshots are display data only and are not serializable project state.
 
 The first mixer routing path applies to track-aware `SONG` arrangement events. Preview and `PAT` playback may continue using the existing direct playback path unless a later feature explicitly adds clip-editor mixer routing.
+
+## Basic Mixer Effects
+
+Basic mixer effects should extend the existing `SONG` track routing path with one
+track insert effect slot.
+
+Recommended live routing shape:
+
+```text
+scheduled source
+  -> track effect input
+  -> optional effect nodes
+  -> track gain / mute / solo stage
+  -> track meter analyser
+  -> master gain
+  -> master meter analyser
+  -> AudioContext.destination
+```
+
+The first effect set should use Web Audio-native nodes and no third-party
+runtime dependencies:
+
+- `Filter`: `BiquadFilterNode`, initially low-pass or high-pass.
+- `Delay`: `DelayNode`, feedback `GainNode`, and dry/wet gains.
+- `Distortion`: `WaveShaperNode` and dry/wet gains.
+
+React components may edit serializable effect state, but they must not create or
+own effect nodes. The audio engine should receive normalized effect settings and
+own the runtime graph. If an effect is disabled or set to `none`, the track
+should bypass effect processing and preserve the dry signal.
+
+Parameter updates during playback should update existing nodes where practical
+and avoid obvious clicks. If an implementation rebuilds a track effect graph, it
+must disconnect old runtime nodes and avoid leaving stale paths connected.
+
+Arrangement WAV export should apply equivalent effect settings so rendered audio
+matches live `SONG` playback where practical. Offline rendering may share pure
+graph-building helpers with the browser engine or build equivalent nodes in the
+offline context.
 
 ## One-shot Sample Playback
 
@@ -304,5 +357,5 @@ The UI may render a vertical playhead over the piano roll or drum sequencer by c
 - Sampler instrument.
 - Synth instruments.
 - More advanced mixer routing such as pan, sends, buses, automation, and recording arm.
-- Effects hosted as audio-engine-owned Web Audio nodes.
+- More advanced effects such as reverb, multiple slots, chains, presets, and automation.
 - Offline/export rendering later.

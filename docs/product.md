@@ -30,7 +30,7 @@ The MVP is a browser-first 1-bar hybrid clip editor with:
 - Loop playback.
 - Bundled starter samples.
 - Later WAV import for user audio clips.
-- Basic project JSON export/import later.
+- Basic project JSON and bundle export/import later.
 - Serializable project state.
 
 ## Non-goals
@@ -50,6 +50,7 @@ The MVP is a browser-first 1-bar hybrid clip editor with:
 - Users can place clips on an arrangement timeline and hear the placed clips in song order.
 - Users can adjust track and master levels and mute or solo tracks during arrangement playback.
 - Users can keep separate songs or sketches as multiple local browser projects.
+- Users can move editable projects between browser profiles, with imported WAV files restored through bundle import or relinked by hash.
 - Project data can be represented as JSON without runtime audio objects.
 - The codebase separates UI rendering, project state, persistence, and audio scheduling.
 - Future contributors can pick up feature specs and implement small, reviewable tasks.

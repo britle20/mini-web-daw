@@ -30,7 +30,7 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Store clip length and arrangement length as serializable musical values.
 - Store project identity and project metadata separately from runtime UI selection.
 - Provide pure transformations for creating, moving, and deleting arrangement clip instances.
-- Store serializable mixer settings such as track volume, mute, solo, and master volume when mixer routing exists.
+- Store serializable mixer settings such as track volume, mute, solo, master volume, and effect settings when mixer routing exists.
 - Avoid references to Web Audio runtime objects.
 
 ### Audio engine
@@ -55,6 +55,10 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Persist browser-local project documents and imported sample blobs through IndexedDB.
 - Persist a browser-local project collection for create/select/rename/delete workflows.
 - Store the active project ID separately from the project document.
+- Export and import portable project JSON files.
+- Export and import app-created project bundle ZIP files that contain `project.json` plus imported WAV blobs.
+- Compute and verify imported sample content hashes for relinking and bundle validation.
+- Relink missing imported samples by attaching a validated user-selected WAV blob to an existing project-scoped `sampleId`.
 - Export rendered arrangement audio as WAV without storing runtime audio objects in project JSON.
 
 ### Utilities
@@ -96,13 +100,21 @@ Imported browser files are also runtime or persistence-layer data. Project JSON 
 
 IndexedDB may store imported sample blobs or bytes outside the project JSON document. The model should reference those blobs by stable sample IDs so the audio engine can rebuild decoded runtime caches after restore.
 
+Portable project JSON exports should include imported sample `sampleId` values and metadata such as source file name, MIME type, duration, byte length, and `contentHashSha256` when available. They should not include imported WAV bytes. JSON-only imports may therefore restore imported clips as missing-source clips until the user relinks matching WAV files.
+
+Project bundle exports may include imported WAV blobs in an app-owned ZIP layout next to `project.json`. Bundle import should restore blobs into project-scoped persistence and verify their hashes when metadata is available.
+
 Each persisted project has a stable project ID. Imported sample blobs are scoped
 to the owning project with project-aware records and composite blob keys.
 Switching projects should stop live playback and preview before replacing app
 state. Autosave must write to the intended project ID and must not accidentally
 overwrite another project after a switch.
 
-Mixer settings such as volume, mute, solo, and master volume are serializable project or app-model data once real mixer routing exists. Mixer runtime data, including `GainNode`, `AnalyserNode`, effect nodes, meter buffers, and active routing graphs, belongs to the audio engine runtime and must not be stored in project JSON.
+Mixer settings such as volume, mute, solo, master volume, and effect settings
+are serializable project or app-model data once real mixer routing exists. Mixer
+runtime data, including `GainNode`, `AnalyserNode`, effect nodes, meter buffers,
+and active routing graphs, belongs to the audio engine runtime and must not be
+stored in project JSON.
 
 Arrangement placement data is serializable. A placed clip should be represented by a `ClipInstance` with stable IDs, `startTick`, `lengthTicks`, and track membership. Drag state, pointer coordinates, DOM measurements, scheduler timers, decoded buffers, and active audio nodes are runtime-only and must not be persisted.
 

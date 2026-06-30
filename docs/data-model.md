@@ -71,6 +71,8 @@ The first implementation stores imported blobs in a project-scoped IndexedDB
 store keyed by a composite ID such as `${projectId}::${sampleId}` and also keeps
 the `projectId` on the record for deletion by project.
 
+Project file export/import should preserve sample IDs inside the exported project. If the imported project's `projectId` collides with a local project, the app may assign a new local project ID while leaving internal clip IDs and sample IDs unchanged.
+
 Switching projects should not mutate the outgoing project document except for an intentional save or autosave flush. Runtime UI selection, decoded sample caches, active source nodes, transport state, and audio preview state should be reset or rebuilt for the newly active project.
 
 ## Hybrid Clips
@@ -125,7 +127,30 @@ If a track is both muted and soloed, muted wins and the track remains silent.
 
 `GainNode`, `AnalyserNode`, effect nodes, meter buffers, and active routing graphs are runtime-only audio-engine data. Project JSON should store only settings and stable IDs. Level meter values are runtime display data and should not be persisted.
 
-Effect slots may remain UI placeholders until a basic effects feature introduces serializable effect state intentionally.
+The basic mixer effects feature should introduce one serializable track insert
+effect slot. The slot stores effect kind, enabled state, and parameter values;
+it does not store Web Audio nodes.
+
+Illustrative first effect state:
+
+```ts
+export type TrackEffectKind = "none" | "filter" | "delay" | "distortion";
+
+export interface TrackEffectState {
+  id: "track-insert-1";
+  kind: TrackEffectKind;
+  enabled: boolean;
+  parameters:
+    | FilterEffectParameters
+    | DelayEffectParameters
+    | DistortionEffectParameters
+    | null;
+}
+```
+
+Existing projects that do not have effect state should migrate to a disabled
+`none` slot. Multiple slots, effect chains, sends, automation, and presets are
+separate features.
 
 ## M1 Clip Collection and Sidebar Membership
 
@@ -159,13 +184,32 @@ The first sidebar management implementation allows a clip to have zero pitched i
 
 Deleting a pitched instrument from a clip must deliberately handle notes owned by that instrument. Prefer requiring confirmation before deleting those notes. If confirmation UI is not available, disable deletion while owned notes exist and make the reason clear.
 
+## Clip Duplication
+
+Duplicating a clip creates a new reusable source clip. It should not create or mutate arrangement `ClipInstance` objects.
+
+Hybrid clip duplication should deep-copy serializable musical content while assigning a new stable clip ID:
+
+- `lengthTicks`.
+- `drumStepSubdivision`.
+- ordered `drumLanes`.
+- `drumEvents`.
+- `pitchedInstrumentIds`.
+- `noteEvents`.
+
+Duplicated drum and note events should receive new stable IDs when event IDs are stored. If drum event IDs are deterministic, regenerate them from the duplicated clip ID, lane ID, and start tick.
+
+Audio clip duplication should create a new audio clip record with its own clip ID while sharing the same `sampleId`, source file metadata, and project-scoped imported blob record. Do not duplicate imported media bytes, decoded buffers, object URLs, or `AudioBuffer` instances.
+
+Arrangement placements remain separate. Existing `ClipInstance` records should continue to reference the original source clip unless the user explicitly places the duplicate later.
+
 ## Imported Audio Clips
 
 Imported WAV files should create audio clips that reference serializable sample metadata.
 
 The model should keep these concepts separate:
 
-- Source media metadata: file name, MIME type, display name, duration, and stable sample ID.
+- Source media metadata: file name, MIME type, display name, duration, byte length, content hash, source BPM, and stable sample ID.
 - Clip identity: the reusable audio clip shown in the sidebar.
 - Runtime media data: `File`, `Blob`, object URL, decoded `AudioBuffer`, and active source nodes.
 - Future arrangement placement: where a clip instance appears in song time and how long that instance lasts.
@@ -193,7 +237,50 @@ export interface AudioClip {
 
 `durationSeconds` describes the source media. It is acceptable here because it is not a musical event position. Arrangement positions and clip instance lengths should still use ticks.
 
+Imported sample metadata should include stable file identity fields when available. `contentHashSha256` identifies the WAV bytes, not decoded audio data.
+
+For BPM-aware imported audio playback, new imported WAV clips should require a user-entered source BPM. Store that value as source media metadata, for example `sourceBpm` on imported sample metadata. The app should not try to infer BPM automatically in the first implementation.
+
+`sourceBpm` is serializable metadata about the source file's intended tempo. It is not an event position, and it does not replace tick-based arrangement placement. Playback derives a stretch rate from `project.tempoBpm / sourceBpm` at scheduling time.
+
+Illustrative shape:
+
+```ts
+export interface ImportedSampleSource {
+  kind: "imported";
+  fileName: string;
+  mimeType?: string;
+  byteLength?: number;
+  contentHashSha256?: string;
+  sourceBpm?: number;
+}
+```
+
+After BPM-aware imported audio is implemented, newly imported WAV clips should have `sourceBpm`. Existing or imported project files may still lack it; those clips should show a clear missing-source-BPM state or provide an edit path before tempo-synced playback.
+
 Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
+
+## Project File Export and Import
+
+Project JSON export should serialize editable project data and imported sample metadata, but not imported WAV bytes.
+
+JSON-only import should:
+
+- Create a new browser-local project instead of overwriting the active project.
+- Preserve internal clip IDs, arrangement instance IDs, and sample IDs where possible.
+- Generate a new local project ID if the exported project ID collides with an existing local project.
+- Mark imported samples as missing when no blob is available.
+
+Missing imported samples can be relinked by selecting a local WAV file. The app should compute the selected file's SHA-256 hash and attach the blob to the existing project-scoped `sampleId` when the hash matches `contentHashSha256`. Filename, byte length, and duration are secondary fallback checks for older projects that do not have hash metadata.
+
+Project bundle export should produce an app-owned ZIP file with `project.json` and imported WAV blobs. Recommended entries:
+
+```text
+project.json
+samples/imported/<sampleId>.wav
+```
+
+Bundle import should restore the project document and save each bundled WAV blob under the imported project's local project ID and original `sampleId`. Bundle entries should be verified against `contentHashSha256` when available. Missing or mismatched entries should leave the relevant sample in a missing-source state rather than embedding runtime media in project JSON.
 
 ## Arrangement Clip Placement
 
@@ -262,7 +349,9 @@ Default instance lengths:
 - Hybrid clip: use the source clip's `lengthTicks`, initially 1920 ticks for a 1-bar clip.
 - Audio clip: derive an initial `lengthTicks` from `durationSeconds` and current `tempoBpm` when placed, or use an equivalent helper that keeps arrangement placement tick-based.
 
-Without time stretching, imported audio playback runs at original speed. If an audio clip instance is shorter than the source, playback is cropped. If it is longer than the source, playback may end naturally and leave silence. Changing project tempo can change the musical grid without changing the underlying audio source speed until a later time-stretching feature exists.
+Without time stretching, imported audio playback runs at original speed. If an audio clip instance is shorter than the source, playback is cropped. If it is longer than the source, playback may end naturally and leave silence.
+
+After BPM-aware imported audio playback is implemented, imported WAV clips with valid `sourceBpm` may be pitch-preserving stretched at scheduling time so they follow the project BPM. The source clip and `ClipInstance` still store arrangement positions and lengths in ticks. The runtime audio engine owns decoded buffers and stretch nodes.
 
 Snap and movement should update tick values, not pixel positions. UI geometry is derived from `startTick`, `lengthTicks`, track order, and timeline constants.
 
@@ -544,6 +633,9 @@ export interface SampleMeta {
     path?: string;
     fileName?: string;
     mimeType?: string;
+    byteLength?: number;
+    contentHashSha256?: string;
+    sourceBpm?: number;
   };
 }
 
@@ -595,3 +687,5 @@ export interface SamplerEnvelopeMeta {
 Use a runtime sample cache keyed by `sampleId` when playback needs decoded audio.
 
 After restoring an imported audio clip from IndexedDB, the app should decode the stored blob back into the audio engine runtime cache on demand, such as when previewing the clip or starting arrangement playback.
+
+After importing a JSON-only project file, imported audio clips may exist without their blobs. Runtime playback and arrangement export should report missing sample sources clearly until the user relinks matching WAV files or imports a bundle that contains those blobs.
