@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 import type { MixerLevelSnapshot } from "../../audio";
 import {
@@ -54,8 +54,17 @@ interface MixerChannel {
   state: MasterMixerState | TrackMixerState;
 }
 
+type EffectPopupPlacement = "left" | "right";
+
+interface OpenEffectPopup {
+  placement: EffectPopupPlacement;
+  trackId: string;
+}
+
 const MASTER_CHANNEL_ID = "master";
 const FADER_STEP_DB = 1;
+const EFFECT_PANEL_WIDTH_PX = 220;
+const EFFECT_PANEL_GAP_PX = 8;
 
 export function MixerPanel({
   masterMixerState,
@@ -68,7 +77,10 @@ export function MixerPanel({
   tracks,
   trackMixerStates,
 }: MixerPanelProps) {
-  const [openEffectTrackId, setOpenEffectTrackId] = useState<string | null>(null);
+  const stripScrollerRef = useRef<HTMLDivElement>(null);
+  const [openEffectPopup, setOpenEffectPopup] =
+    useState<OpenEffectPopup | null>(null);
+  const openEffectTrackId = openEffectPopup?.trackId ?? null;
   const mixerChannels: MixerChannel[] = [
     ...tracks.map((track) => ({
       active: track.active,
@@ -88,6 +100,39 @@ export function MixerPanel({
     },
   ];
 
+  function getEffectPopupPlacement(
+    sourceElement: HTMLElement,
+  ): EffectPopupPlacement {
+    const stripElement = sourceElement.closest<HTMLElement>(
+      "[data-mixer-channel-strip]",
+    );
+    const stripRect =
+      stripElement?.getBoundingClientRect() ??
+      sourceElement.getBoundingClientRect();
+    const scrollerRect = stripScrollerRef.current?.getBoundingClientRect();
+
+    if (!scrollerRect) {
+      return "right";
+    }
+
+    const requiredSpace = EFFECT_PANEL_WIDTH_PX + EFFECT_PANEL_GAP_PX;
+    const rightSpace = scrollerRect.right - stripRect.right;
+    const leftSpace = stripRect.left - scrollerRect.left;
+
+    if (rightSpace < requiredSpace && leftSpace >= requiredSpace) {
+      return "left";
+    }
+
+    return "right";
+  }
+
+  function openEffectPopupForTrack(trackId: string, sourceElement: HTMLElement) {
+    setOpenEffectPopup({
+      placement: getEffectPopupPlacement(sourceElement),
+      trackId,
+    });
+  }
+
   return (
     <section className={styles.mixerPanel} aria-label="Arrangement mixer panel">
       <header className={styles.header}>
@@ -97,7 +142,7 @@ export function MixerPanel({
         <p className={styles.statusText}>Live routing / runtime meters</p>
       </header>
 
-      <div className={styles.stripScroller}>
+      <div className={styles.stripScroller} ref={stripScrollerRef}>
         <div className={styles.stripRow}>
           {mixerChannels.map((channel) => {
             const isTrackChannel = channel.role === "track";
@@ -116,6 +161,7 @@ export function MixerPanel({
                     : ""
                 }`}
                 key={channel.id}
+                data-mixer-channel-strip="true"
               >
                 <header className={styles.channelHeader}>
                   <span className={styles.trackName}>{channel.name}</span>
@@ -187,28 +233,40 @@ export function MixerPanel({
                     channelName={channel.name}
                     effectSlot={trackState.effectSlot}
                     isOpen={openEffectTrackId === channel.id}
-                    onEffectSelect={(effectSlot) => {
+                    onEffectSelect={(effectSlot, sourceElement) => {
                       onTrackEffectChange(channel.id, effectSlot);
-                      setOpenEffectTrackId(
-                        effectSlot.kind === "none" ? null : channel.id,
-                      );
+                      if (effectSlot.kind === "none") {
+                        setOpenEffectPopup(null);
+                        return;
+                      }
+
+                      openEffectPopupForTrack(channel.id, sourceElement);
                     }}
-                    onPanelToggle={() =>
-                      setOpenEffectTrackId((currentTrackId) =>
-                        currentTrackId === channel.id ? null : channel.id,
-                      )
-                    }
+                    onPanelToggle={(sourceElement) => {
+                      setOpenEffectPopup((currentPopup) => {
+                        if (currentPopup?.trackId === channel.id) {
+                          return null;
+                        }
+
+                        return {
+                          placement: getEffectPopupPlacement(sourceElement),
+                          trackId: channel.id,
+                        };
+                      });
+                    }}
                   />
                 ) : (
                   <div className={styles.effectSpacer} aria-hidden="true" />
                 )}
                 {trackState &&
-                openEffectTrackId === channel.id &&
+                openEffectPopup &&
+                openEffectPopup.trackId === channel.id &&
                 trackState.effectSlot.kind !== "none" ? (
                   <EffectParameterPanel
                     channelName={channel.name}
                     effectSlot={trackState.effectSlot}
-                    onClose={() => setOpenEffectTrackId(null)}
+                    placement={openEffectPopup.placement}
+                    onClose={() => setOpenEffectPopup(null)}
                     onEffectChange={(effectSlot) =>
                       onTrackEffectChange(channel.id, effectSlot)
                     }
@@ -233,8 +291,11 @@ function EffectSlotControl({
   channelName: string;
   effectSlot: TrackEffectState;
   isOpen: boolean;
-  onEffectSelect: (effectSlot: TrackEffectState) => void;
-  onPanelToggle: () => void;
+  onEffectSelect: (
+    effectSlot: TrackEffectState,
+    sourceElement: HTMLElement,
+  ) => void;
+  onPanelToggle: (sourceElement: HTMLElement) => void;
 }) {
   return (
     <div className={styles.effectSlotControl}>
@@ -244,6 +305,7 @@ function EffectSlotControl({
         onChange={(event) =>
           onEffectSelect(
             createTrackEffectState(event.currentTarget.value as TrackEffectKind),
+            event.currentTarget,
           )
         }
         value={effectSlot.kind}
@@ -258,7 +320,7 @@ function EffectSlotControl({
         aria-label={`Open ${channelName} effect controls`}
         className={styles.effectPanelButton}
         disabled={effectSlot.kind === "none"}
-        onClick={onPanelToggle}
+        onClick={(event) => onPanelToggle(event.currentTarget)}
         type="button"
       >
         ...
@@ -270,18 +332,24 @@ function EffectSlotControl({
 function EffectParameterPanel({
   channelName,
   effectSlot,
+  placement,
   onClose,
   onEffectChange,
 }: {
   channelName: string;
   effectSlot: TrackEffectState;
+  placement: EffectPopupPlacement;
   onClose: () => void;
   onEffectChange: (effectSlot: TrackEffectState) => void;
 }) {
   return (
     <aside
       aria-label={`${channelName} effect controls`}
-      className={styles.effectParameterPanel}
+      className={`${styles.effectParameterPanel} ${
+        placement === "left"
+          ? styles.effectParameterPanelLeft
+          : styles.effectParameterPanelRight
+      }`}
     >
       <header className={styles.effectPanelHeader}>
         <div>

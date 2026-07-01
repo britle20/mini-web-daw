@@ -78,6 +78,7 @@
   display: flex;
   gap: var(--space-gutter);
   min-height: 100%;
+  padding-left: calc(220px + var(--space-gutter));
   padding-right: calc(220px + var(--space-gutter));
   width: max-content;
 }
@@ -271,15 +272,22 @@
   box-shadow: var(--panel-inset-shadow);
   display: grid;
   gap: var(--space-gutter);
-  left: calc(100% + var(--space-gutter));
-  max-height: 142px;
-  min-height: 142px;
+  max-height: 190px;
+  min-height: 190px;
   overflow-y: auto;
   padding: var(--space-gutter);
   position: absolute;
   top: 0;
   width: 220px;
   z-index: var(--z-index-popover);
+}
+
+.effectParameterPanelRight {
+  left: calc(100% + var(--space-gutter));
+}
+
+.effectParameterPanelLeft {
+  right: calc(100% + var(--space-gutter));
 }
 
 .effectPanelHeader {
