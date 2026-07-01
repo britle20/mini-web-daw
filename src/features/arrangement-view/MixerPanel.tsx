@@ -202,15 +202,7 @@ export function MixerPanel({
                     }
                   />
                 ) : (
-                  <button
-                    aria-disabled="true"
-                    aria-label={`${channel.name} effect placeholder`}
-                    className={styles.effectSlot}
-                    disabled
-                    type="button"
-                  >
-                    FX: None
-                  </button>
+                  <div className={styles.effectSpacer} aria-hidden="true" />
                 )}
               </article>
             );
@@ -259,10 +251,10 @@ function EffectSlotControl({
         }
         value={effectSlot.kind}
       >
-        <option value="none">FX: None</option>
-        <option value="filter">FX: Filter</option>
-        <option value="delay">FX: Delay</option>
-        <option value="distortion">FX: Distort</option>
+        <option value="none">No FX</option>
+        <option value="filter">Filter</option>
+        <option value="delay">Delay</option>
+        <option value="distortion">Distort</option>
       </select>
       <button
         aria-expanded={isOpen}

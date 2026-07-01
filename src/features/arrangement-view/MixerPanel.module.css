@@ -24,7 +24,6 @@
 .faderLabel,
 .volumeValue,
 .masterLabel,
-.effectSlot,
 .effectSlotSelect,
 .effectPanelButton,
 .effectPanelEyebrow,
@@ -194,7 +193,6 @@
 }
 
 .toggleButton,
-.effectSlot,
 .effectSlotSelect,
 .effectPanelButton,
 .effectPanelCloseButton {
@@ -230,17 +228,13 @@
   color: var(--color-on-primary);
 }
 
-.effectSlot {
-  overflow: hidden;
-  padding: 0 var(--space-unit);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.effectSlot:disabled,
 .effectPanelButton:disabled {
   cursor: default;
   opacity: 0.7;
+}
+
+.effectSpacer {
+  min-height: 26px;
 }
 
 .effectSlotControl {
