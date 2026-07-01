@@ -194,6 +194,7 @@
   color: var(--color-text-dim);
   display: flex;
   justify-content: center;
+  margin: 0;
   min-height: 26px;
 }
 
@@ -270,8 +271,8 @@
   box-shadow: var(--panel-inset-shadow);
   display: grid;
   gap: var(--space-gutter);
-  max-height: 190px;
-  min-height: 190px;
+  max-height: 230px;
+  min-height: 180px;
   overflow-y: auto;
   padding: var(--space-gutter);
   position: absolute;
