@@ -78,6 +78,7 @@
   display: flex;
   gap: var(--space-gutter);
   min-height: 100%;
+  padding-right: calc(220px + var(--space-gutter));
   width: max-content;
 }
 
@@ -91,7 +92,12 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-height: 142px;
   padding: var(--space-gutter);
+  position: relative;
   width: 132px;
+}
+
+.channelStripWithPopup {
+  z-index: var(--z-index-popover);
 }
 
 .inactiveStrip {
@@ -259,19 +265,21 @@
 }
 
 .effectParameterPanel {
-  align-self: stretch;
   background: var(--color-surface-container-low);
   border: 1px solid var(--color-outline);
   border-radius: var(--radius-sm);
   box-shadow: var(--panel-inset-shadow);
   display: grid;
-  flex: 0 0 220px;
   gap: var(--space-gutter);
+  left: calc(100% + var(--space-gutter));
   max-height: 142px;
   min-height: 142px;
   overflow-y: auto;
   padding: var(--space-gutter);
+  position: absolute;
+  top: 0;
   width: 220px;
+  z-index: var(--z-index-popover);
 }
 
 .effectPanelHeader {

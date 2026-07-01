@@ -1,4 +1,4 @@
-import { Fragment, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 
 import type { MixerLevelSnapshot } from "../../audio";
 import {
@@ -107,98 +107,101 @@ export function MixerPanel({
             const volumeDb = channel.state.volumeDb;
 
             return (
-              <Fragment key={channel.id}>
-                <article
-                  className={`${styles.channelStrip} ${
-                    channel.role === "master" ? styles.masterStrip : ""
-                  } ${channel.active ? "" : styles.inactiveStrip}`}
-                >
-                  <header className={styles.channelHeader}>
-                    <span className={styles.trackName}>{channel.name}</span>
-                  </header>
+              <article
+                className={`${styles.channelStrip} ${
+                  channel.role === "master" ? styles.masterStrip : ""
+                } ${channel.active ? "" : styles.inactiveStrip} ${
+                  openEffectTrackId === channel.id
+                    ? styles.channelStripWithPopup
+                    : ""
+                }`}
+                key={channel.id}
+              >
+                <header className={styles.channelHeader}>
+                  <span className={styles.trackName}>{channel.name}</span>
+                </header>
 
-                  <div className={styles.controlsGrid}>
-                    <LevelMeter
-                      isMuted={trackState?.muted ?? false}
-                      level={channel.level}
-                    />
-                    <label className={styles.faderGroup}>
-                      <span className={styles.faderLabel}>Vol</span>
-                      <input
-                        aria-label={`${channel.name} volume`}
-                        className={styles.fader}
-                        max={MIXER_MAX_VOLUME_DB}
-                        min={MIXER_MIN_VOLUME_DB}
-                        onChange={(event) => {
-                          const nextVolumeDb = Number(event.currentTarget.value);
+                <div className={styles.controlsGrid}>
+                  <LevelMeter
+                    isMuted={trackState?.muted ?? false}
+                    level={channel.level}
+                  />
+                  <label className={styles.faderGroup}>
+                    <span className={styles.faderLabel}>Vol</span>
+                    <input
+                      aria-label={`${channel.name} volume`}
+                      className={styles.fader}
+                      max={MIXER_MAX_VOLUME_DB}
+                      min={MIXER_MIN_VOLUME_DB}
+                      onChange={(event) => {
+                        const nextVolumeDb = Number(event.currentTarget.value);
 
-                          if (isTrackChannel) {
-                            onTrackVolumeChange(channel.id, nextVolumeDb);
-                            return;
-                          }
+                        if (isTrackChannel) {
+                          onTrackVolumeChange(channel.id, nextVolumeDb);
+                          return;
+                        }
 
-                          onMasterVolumeChange(nextVolumeDb);
-                        }}
-                        step={FADER_STEP_DB}
-                        type="range"
-                        value={volumeDb}
-                      />
-                      <span className={styles.volumeValue}>
-                        {formatVolumeDb(volumeDb)}
-                      </span>
-                    </label>
-                  </div>
-
-                  {trackState ? (
-                    <div className={styles.toggleRow}>
-                      <button
-                        aria-label={`Mute ${channel.name}`}
-                        aria-pressed={trackState.muted}
-                        className={`${styles.toggleButton} ${
-                          trackState.muted ? styles.muteActive : ""
-                        }`}
-                        onClick={() => onTrackMuteToggle(channel.id)}
-                        type="button"
-                      >
-                        M
-                      </button>
-                      <button
-                        aria-label={`Solo ${channel.name}`}
-                        aria-pressed={trackState.solo}
-                        className={`${styles.toggleButton} ${
-                          trackState.solo ? styles.soloActive : ""
-                        }`}
-                        onClick={() => onTrackSoloToggle(channel.id)}
-                        type="button"
-                      >
-                        S
-                      </button>
-                    </div>
-                  ) : (
-                    <p className={styles.masterLabel}>MASTER OUT</p>
-                  )}
-
-                  {trackState ? (
-                    <EffectSlotControl
-                      channelName={channel.name}
-                      effectSlot={trackState.effectSlot}
-                      isOpen={openEffectTrackId === channel.id}
-                      onEffectSelect={(effectSlot) => {
-                        onTrackEffectChange(channel.id, effectSlot);
-                        setOpenEffectTrackId(
-                          effectSlot.kind === "none" ? null : channel.id,
-                        );
+                        onMasterVolumeChange(nextVolumeDb);
                       }}
-                      onPanelToggle={() =>
-                        setOpenEffectTrackId((currentTrackId) =>
-                          currentTrackId === channel.id ? null : channel.id,
-                        )
-                      }
+                      step={FADER_STEP_DB}
+                      type="range"
+                      value={volumeDb}
                     />
-                  ) : (
-                    <div className={styles.effectSpacer} aria-hidden="true" />
-                  )}
-                </article>
+                    <span className={styles.volumeValue}>
+                      {formatVolumeDb(volumeDb)}
+                    </span>
+                  </label>
+                </div>
+
+                {trackState ? (
+                  <div className={styles.toggleRow}>
+                    <button
+                      aria-label={`Mute ${channel.name}`}
+                      aria-pressed={trackState.muted}
+                      className={`${styles.toggleButton} ${
+                        trackState.muted ? styles.muteActive : ""
+                      }`}
+                      onClick={() => onTrackMuteToggle(channel.id)}
+                      type="button"
+                    >
+                      M
+                    </button>
+                    <button
+                      aria-label={`Solo ${channel.name}`}
+                      aria-pressed={trackState.solo}
+                      className={`${styles.toggleButton} ${
+                        trackState.solo ? styles.soloActive : ""
+                      }`}
+                      onClick={() => onTrackSoloToggle(channel.id)}
+                      type="button"
+                    >
+                      S
+                    </button>
+                  </div>
+                ) : (
+                  <p className={styles.masterLabel}>MASTER OUT</p>
+                )}
+
+                {trackState ? (
+                  <EffectSlotControl
+                    channelName={channel.name}
+                    effectSlot={trackState.effectSlot}
+                    isOpen={openEffectTrackId === channel.id}
+                    onEffectSelect={(effectSlot) => {
+                      onTrackEffectChange(channel.id, effectSlot);
+                      setOpenEffectTrackId(
+                        effectSlot.kind === "none" ? null : channel.id,
+                      );
+                    }}
+                    onPanelToggle={() =>
+                      setOpenEffectTrackId((currentTrackId) =>
+                        currentTrackId === channel.id ? null : channel.id,
+                      )
+                    }
+                  />
+                ) : (
+                  <div className={styles.effectSpacer} aria-hidden="true" />
+                )}
                 {trackState &&
                 openEffectTrackId === channel.id &&
                 trackState.effectSlot.kind !== "none" ? (
@@ -211,7 +214,7 @@ export function MixerPanel({
                     }
                   />
                 ) : null}
-              </Fragment>
+              </article>
             );
           })}
         </div>
