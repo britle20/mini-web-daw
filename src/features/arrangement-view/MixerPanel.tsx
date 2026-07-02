@@ -11,7 +11,9 @@ import {
   EFFECT_MAX_WET_MIX,
   EFFECT_MIN_WET_MIX,
   FILTER_MAX_FREQUENCY_HZ,
+  FILTER_MAX_Q,
   FILTER_MIN_FREQUENCY_HZ,
+  FILTER_MIN_Q,
   MIXER_MAX_VOLUME_DB,
   MIXER_MIN_VOLUME_DB,
   createTrackEffectState,
@@ -456,6 +458,24 @@ function FilterEffectControls({
         step={10}
         value={parameters.frequencyHz}
         valueLabel={`${Math.round(parameters.frequencyHz)} Hz`}
+      />
+      <EffectRange
+        label="Resonance"
+        max={FILTER_MAX_Q}
+        min={FILTER_MIN_Q}
+        onChange={(q) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                q,
+              },
+            }),
+          )
+        }
+        step={0.1}
+        value={parameters.q}
+        valueLabel={parameters.q.toFixed(1)}
       />
     </>
   );
