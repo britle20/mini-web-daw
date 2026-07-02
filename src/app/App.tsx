@@ -443,7 +443,7 @@ export function App() {
       setToastMessage((currentMessage) =>
         currentMessage?.id === toastMessage.id ? null : currentMessage,
       );
-    }, 2600);
+    }, 3000);
 
     return () => window.clearTimeout(timeoutId);
   }, [toastMessage]);
