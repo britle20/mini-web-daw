@@ -147,21 +147,6 @@ function createNextHybridClip(clips: readonly Clip[]): HybridClip {
   });
 }
 
-function createNextProjectName(projectSummaries: readonly ProjectSummary[]): string {
-  const nextProjectNumber =
-    projectSummaries.reduce((highestProjectNumber, projectSummary) => {
-      const match = /^Project (\d+)$/u.exec(projectSummary.name);
-      const projectNumber = match ? Number.parseInt(match[1] ?? "", 10) : 0;
-
-      return Math.max(
-        highestProjectNumber,
-        Number.isNaN(projectNumber) ? 0 : projectNumber,
-      );
-    }, 0) + 1;
-
-  return `Project ${nextProjectNumber}`;
-}
-
 function createBlankProjectDocument({
   existingProjectIds,
   name,
@@ -976,18 +961,12 @@ export function App() {
     }
   }
 
-  function handleProjectCreate() {
-    const suggestedProjectName = createNextProjectName(projectSummariesRef.current);
-    const requestedProjectName = window.prompt(
-      "New project name",
-      suggestedProjectName,
-    );
+  function handleProjectCreate(projectName: string) {
+    const nextProjectName = projectName.trim();
 
-    if (requestedProjectName === null) {
+    if (!nextProjectName || isProjectOperationPending) {
       return;
     }
-
-    const nextProjectName = requestedProjectName.trim() || suggestedProjectName;
 
     void runProjectOperation(async () => {
       await saveCurrentProjectNow();
@@ -1015,19 +994,14 @@ export function App() {
     });
   }
 
-  function handleProjectRename() {
-    const requestedProjectName = window.prompt(
-      "Rename project",
-      projectNameRef.current,
-    );
+  function handleProjectRename(projectName: string) {
+    const nextProjectName = projectName.trim();
 
-    if (requestedProjectName === null) {
-      return;
-    }
-
-    const nextProjectName = requestedProjectName.trim();
-
-    if (!nextProjectName || nextProjectName === projectNameRef.current) {
+    if (
+      !nextProjectName ||
+      nextProjectName === projectNameRef.current ||
+      isProjectOperationPending
+    ) {
       return;
     }
 
@@ -1047,17 +1021,8 @@ export function App() {
 
   function handleProjectDelete() {
     const projectId = activeProjectIdRef.current;
-    const name = projectNameRef.current;
 
     if (!projectId || isProjectOperationPending) {
-      return;
-    }
-
-    if (
-      !window.confirm(
-        `Delete "${name}"? This removes the browser-local project and its imported sample data.`,
-      )
-    ) {
       return;
     }
 
