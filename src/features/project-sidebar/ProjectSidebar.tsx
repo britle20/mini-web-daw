@@ -32,6 +32,7 @@ interface ProjectSidebarProps {
   onArrangementExport: () => void;
   onClipAdd: () => void;
   onClipDelete: (clipId: string) => void;
+  onClipDuplicate: (clipId: string) => void;
   onClipImport: (file: File) => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
@@ -52,6 +53,7 @@ export function ProjectSidebar({
   onArrangementExport,
   onClipAdd,
   onClipDelete,
+  onClipDuplicate,
   onClipImport,
   onClipRename,
   onClipSelect,
@@ -66,16 +68,20 @@ export function ProjectSidebar({
   const [expandedClipIds, setExpandedClipIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [openClipActionMenuId, setOpenClipActionMenuId] =
+    useState<string | null>(null);
   const [renamingClipId, setRenamingClipId] = useState<string | null>(null);
   const [draftClipName, setDraftClipName] = useState("");
   const shouldIgnoreRenameBlurRef = useRef(false);
 
   function handleBuildClipClick() {
+    setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
     onClipAdd();
   }
 
   function handleImportFileClick() {
+    setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
     fileInputRef.current?.click();
   }
@@ -95,6 +101,7 @@ export function ProjectSidebar({
   function beginClipRename(clip: Clip) {
     shouldIgnoreRenameBlurRef.current = false;
     setAddingInstrumentClipId(null);
+    setOpenClipActionMenuId(null);
     setRenamingClipId(clip.id);
     setDraftClipName(clip.name);
   }
@@ -146,6 +153,7 @@ export function ProjectSidebar({
   }
 
   function toggleInstrumentPicker(clipId: string) {
+    setOpenClipActionMenuId(null);
     setRenamingClipId(null);
     setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
@@ -160,6 +168,7 @@ export function ProjectSidebar({
 
   function toggleClipExpanded(clipId: string) {
     setAddingInstrumentClipId(null);
+    setOpenClipActionMenuId(null);
     setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
 
@@ -171,6 +180,23 @@ export function ProjectSidebar({
 
       return nextClipIds;
     });
+  }
+
+  function toggleClipActionMenu(clipId: string) {
+    setAddingInstrumentClipId(null);
+    setOpenClipActionMenuId((currentClipId) =>
+      currentClipId === clipId ? null : clipId,
+    );
+  }
+
+  function handleClipDuplicateClick(clipId: string) {
+    setOpenClipActionMenuId(null);
+    onClipDuplicate(clipId);
+  }
+
+  function handleClipDeleteClick(clipId: string) {
+    setOpenClipActionMenuId(null);
+    onClipDelete(clipId);
   }
 
   function handleClipDragStart(
@@ -197,7 +223,10 @@ export function ProjectSidebar({
               aria-label="Add clip"
               className={styles.iconButton}
               disabled={isClipImporting}
-              onClick={() => setIsClipAddMenuOpen((isOpen) => !isOpen)}
+              onClick={() => {
+                setOpenClipActionMenuId(null);
+                setIsClipAddMenuOpen((isOpen) => !isOpen);
+              }}
               type="button"
             >
               <Icon name="add" />
@@ -296,7 +325,10 @@ export function ProjectSidebar({
                       className={styles.clipSelectButton}
                       draggable
                       onDragStart={(event) => handleClipDragStart(event, clip.id)}
-                      onClick={() => onClipSelect(clip.id)}
+                      onClick={() => {
+                        setOpenClipActionMenuId(null);
+                        onClipSelect(clip.id);
+                      }}
                       type="button"
                     >
                       <span>{clip.name}</span>
@@ -305,14 +337,6 @@ export function ProjectSidebar({
                 )}
 
                 <div className={styles.clipActions}>
-                  <button
-                    aria-label={`Rename ${clip.name}`}
-                    className={styles.iconButton}
-                    onClick={() => beginClipRename(clip)}
-                    type="button"
-                  >
-                    <Icon name="edit" />
-                  </button>
                   {isHybrid ? (
                     <button
                       aria-label={`Add instrument to ${clip.name}`}
@@ -324,13 +348,46 @@ export function ProjectSidebar({
                     </button>
                   ) : null}
                   <button
-                    aria-label={`Delete ${clip.name}`}
+                    aria-expanded={openClipActionMenuId === clip.id}
+                    aria-haspopup="menu"
+                    aria-label={`More actions for ${clip.name}`}
                     className={styles.iconButton}
-                    onClick={() => onClipDelete(clip.id)}
+                    onClick={() => toggleClipActionMenu(clip.id)}
                     type="button"
                   >
-                    <Icon name="remove" />
+                    <Icon name="more_vert" />
                   </button>
+                  {openClipActionMenuId === clip.id ? (
+                    <div className={styles.clipActionMenu} role="menu">
+                      <button
+                        className={styles.clipActionMenuItem}
+                        onClick={() => beginClipRename(clip)}
+                        role="menuitem"
+                        type="button"
+                      >
+                        <Icon name="edit" />
+                        <span>Rename</span>
+                      </button>
+                      <button
+                        className={styles.clipActionMenuItem}
+                        onClick={() => handleClipDuplicateClick(clip.id)}
+                        role="menuitem"
+                        type="button"
+                      >
+                        <Icon name="content_copy" />
+                        <span>Duplicate</span>
+                      </button>
+                      <button
+                        className={`${styles.clipActionMenuItem} ${styles.clipActionMenuDangerItem}`}
+                        onClick={() => handleClipDeleteClick(clip.id)}
+                        role="menuitem"
+                        type="button"
+                      >
+                        <Icon name="remove" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 

@@ -40,6 +40,7 @@ import {
   createEmptyHybridClip,
   deleteClipInstance,
   deleteNoteEvent,
+  duplicateClip,
   getClipDeleteConfirmationMessage,
   getHybridClipBarCount,
   getHybridClipLengthTicks,
@@ -1617,6 +1618,38 @@ export function App() {
     commitAnyClip(renameClip({ clip, name }));
   }
 
+  function handleClipDuplicate(clipId: string) {
+    const clip = clipsRef.current.find((candidate) => candidate.id === clipId);
+
+    if (!clip) {
+      return;
+    }
+
+    const duplicatedClip = duplicateClip({
+      clip,
+      existingClipIds: clipsRef.current.map((candidate) => candidate.id),
+      existingClipNames: clipsRef.current.map((candidate) => candidate.name),
+    });
+    const nextClips = [...clipsRef.current, duplicatedClip];
+
+    stopAudioClipPreview();
+    clipsRef.current = nextClips;
+    setClips(nextClips);
+    selectClipDefault(duplicatedClip);
+
+    if (transportState === "playing" && transportMode !== "song") {
+      if (isHybridClip(duplicatedClip)) {
+        void updatePlayingClipEvents(duplicatedClip);
+        return;
+      }
+
+      const snapshot = audioEngine.stopLoop();
+
+      setTransportState(snapshot.status);
+      commitPlayheadTick(snapshot.currentTick);
+    }
+  }
+
   function handleClipDelete(clipId: string) {
     const currentClips = clipsRef.current;
 
@@ -2350,6 +2383,7 @@ export function App() {
           onArrangementExport={handleArrangementWavExport}
           onClipAdd={handleClipAdd}
           onClipDelete={handleClipDelete}
+          onClipDuplicate={handleClipDuplicate}
           onClipImport={handleAudioClipImport}
           onClipRename={handleClipRename}
           onClipSelect={handleClipSelect}
