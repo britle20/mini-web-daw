@@ -21,6 +21,7 @@ import {
   type TransportMode,
   type TransportState,
 } from "../features";
+import { Icon } from "../components";
 import {
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_ARRANGEMENT_LENGTH_BARS,
@@ -2521,11 +2522,12 @@ export function App() {
                 {pendingConfirmation.title}
               </h2>
               <button
+                aria-label="Close confirmation dialog"
                 className={styles.dialogCloseButton}
                 onClick={cancelConfirmation}
                 type="button"
               >
-                Close
+                <Icon name="close" />
               </button>
             </div>
 
