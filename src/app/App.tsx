@@ -1739,16 +1739,11 @@ export function App() {
     setIsProjectFileProcessing(true);
 
     try {
-      const { missingSampleIds, project } = await prepareProjectFileExport();
+      const { project } = await prepareProjectFileExport();
 
       downloadBlob(
         createProjectJsonBlob(project),
         createProjectJsonFileName(project.name),
-      );
-      setProjectFileNotice(
-        missingSampleIds.length > 0
-          ? "Project JSON exported. Missing imported WAVs must be relinked after import."
-          : "Project JSON exported.",
       );
     } catch (error) {
       setProjectFileError(
@@ -1769,19 +1764,13 @@ export function App() {
     setIsProjectFileProcessing(true);
 
     try {
-      const { importedSampleBlobs, missingSampleIds, project } =
-        await prepareProjectFileExport();
+      const { importedSampleBlobs, project } = await prepareProjectFileExport();
       const bundleBlob = await createProjectBundleBlob({
         importedSampleBlobs,
         project,
       });
 
       downloadBlob(bundleBlob, createProjectBundleFileName(project.name));
-      setProjectFileNotice(
-        missingSampleIds.length > 0
-          ? "Project bundle exported with missing imported WAVs omitted."
-          : "Project bundle exported.",
-      );
     } catch (error) {
       setProjectFileError(
         error instanceof Error ? error.message : "Project bundle export failed.",

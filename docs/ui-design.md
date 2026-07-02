@@ -376,11 +376,14 @@ The first audio clip selected view may be a simple placeholder or detail panel:
 
 Use clear copy for file boundaries. Imported WAV bytes are browser-local source media stored outside project JSON. JSON-only project imports may need relinking, while project bundles include available source WAV files.
 
-The sidebar project-file area should keep editable project transfer separate from final arrangement audio export:
+The sidebar should keep footer actions compact. Use one `Export` button that opens a small menu:
 
 - `Export Project JSON` exports serializable project data and sample metadata only.
 - `Export Project Bundle` exports an app-owned ZIP with `project.json` and available imported WAV blobs.
-- `Import Project File` accepts app JSON or app-created ZIP bundles and creates a new local project.
+- `Export Arrangement WAV` renders the final arrangement audio.
+
+Keep `Import Project File` as a separate footer action. It accepts app JSON or app-created ZIP bundles and creates a new local project.
+
 - Missing imported samples should appear as a compact list with one `Relink` action per sample.
 
 The top transport/status area should show minimal project save status such as loading, saving, saved, or save failed.

@@ -358,20 +358,6 @@
   padding: var(--space-panel);
 }
 
-.footerSection {
-  display: grid;
-  gap: var(--space-unit);
-}
-
-.footerSectionLabel {
-  color: var(--color-text-dim);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--letter-spacing-label);
-  margin: 0;
-  text-transform: uppercase;
-}
-
 .footerButton:disabled {
   color: var(--color-text-dim);
   cursor: wait;
@@ -381,6 +367,52 @@
 .footerButton:disabled:hover {
   background: transparent;
   color: var(--color-text-dim);
+}
+
+.footerActionControl {
+  position: relative;
+}
+
+.exportMenu {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  bottom: calc(100% + var(--space-unit));
+  box-shadow: var(--panel-inset-shadow), 0 10px 24px rgb(0 0 0 / 32%);
+  display: grid;
+  gap: var(--space-unit);
+  left: 0;
+  padding: var(--space-unit);
+  position: absolute;
+  right: 0;
+  z-index: var(--z-index-popover);
+}
+
+.exportMenuItem {
+  align-items: center;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-gutter);
+  min-height: 30px;
+  padding: 0 var(--space-gutter);
+  text-align: left;
+  width: 100%;
+}
+
+.exportMenuItem:hover,
+.exportMenuItem:focus-visible {
+  background: var(--color-surface-container-high);
+  color: var(--color-text);
+}
+
+.exportMenuItem span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fileNotice {

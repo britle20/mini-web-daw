@@ -90,6 +90,7 @@ export function ProjectSidebar({
   const [addingInstrumentClipId, setAddingInstrumentClipId] =
     useState<string | null>(null);
   const [isClipAddMenuOpen, setIsClipAddMenuOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [expandedClipIds, setExpandedClipIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -102,12 +103,14 @@ export function ProjectSidebar({
   function handleBuildClipClick() {
     setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
+    setIsExportMenuOpen(false);
     onClipAdd();
   }
 
   function handleImportFileClick() {
     setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
+    setIsExportMenuOpen(false);
     clipFileInputRef.current?.click();
   }
 
@@ -124,7 +127,23 @@ export function ProjectSidebar({
   }
 
   function handleProjectFileImportClick() {
+    setIsExportMenuOpen(false);
     projectFileInputRef.current?.click();
+  }
+
+  function handleProjectJsonExportClick() {
+    setIsExportMenuOpen(false);
+    onProjectJsonExport();
+  }
+
+  function handleProjectBundleExportClick() {
+    setIsExportMenuOpen(false);
+    onProjectBundleExport();
+  }
+
+  function handleArrangementExportClick() {
+    setIsExportMenuOpen(false);
+    onArrangementExport();
   }
 
   function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -214,6 +233,7 @@ export function ProjectSidebar({
 
   function toggleInstrumentPicker(clipId: string) {
     setOpenClipActionMenuId(null);
+    setIsExportMenuOpen(false);
     setRenamingClipId(null);
     setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
@@ -244,6 +264,7 @@ export function ProjectSidebar({
 
   function toggleClipActionMenu(clipId: string) {
     setAddingInstrumentClipId(null);
+    setIsExportMenuOpen(false);
     setOpenClipActionMenuId((currentClipId) =>
       currentClipId === clipId ? null : clipId,
     );
@@ -285,6 +306,7 @@ export function ProjectSidebar({
               disabled={isClipImporting}
               onClick={() => {
                 setOpenClipActionMenuId(null);
+                setIsExportMenuOpen(false);
                 setIsClipAddMenuOpen((isOpen) => !isOpen);
               }}
               type="button"
@@ -541,98 +563,115 @@ export function ProjectSidebar({
       </nav>
 
       <div className={styles.sidebarFooter}>
-        <div className={styles.footerSection}>
-          <p className={styles.footerSectionLabel}>Project files</p>
+        <div className={styles.footerActionControl}>
           <button
+            aria-expanded={isExportMenuOpen}
+            aria-haspopup="menu"
+            aria-label="Open export options"
             className={styles.footerButton}
-            disabled={isProjectFileProcessing}
-            onClick={onProjectJsonExport}
-            type="button"
-          >
-            <Icon name="description" />
-            <span>Export Project JSON</span>
-          </button>
-          <button
-            className={styles.footerButton}
-            disabled={isProjectFileProcessing}
-            onClick={onProjectBundleExport}
-            type="button"
-          >
-            <Icon name="folder_zip" />
-            <span>Export Project Bundle</span>
-          </button>
-          <button
-            className={styles.footerButton}
-            disabled={isProjectFileProcessing}
-            onClick={handleProjectFileImportClick}
-            type="button"
-          >
-            <Icon name="upload_file" />
-            <span>
-              {isProjectFileProcessing ? "Processing..." : "Import Project File"}
-            </span>
-          </button>
-          <input
-            ref={projectFileInputRef}
-            accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
-            className={styles.hiddenFileInput}
-            onChange={handleProjectFileChange}
-            type="file"
-          />
-          <input
-            ref={relinkFileInputRef}
-            accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
-            className={styles.hiddenFileInput}
-            onChange={handleRelinkFileChange}
-            type="file"
-          />
-          {projectFileNotice ? (
-            <p className={styles.fileNotice}>{projectFileNotice}</p>
-          ) : null}
-          {projectFileError ? (
-            <p className={styles.exportError}>{projectFileError}</p>
-          ) : null}
-          {missingImportedSamples.length > 0 ? (
-            <div className={styles.missingSamples}>
-              <p className={styles.missingSamplesTitle}>Missing samples</p>
-              {missingImportedSamples.map((sample) => (
-                <div className={styles.missingSampleItem} key={sample.sampleId}>
-                  <span title={sample.fileName ?? sample.name}>{sample.name}</span>
-                  <button
-                    className={styles.relinkButton}
-                    disabled={isProjectFileProcessing}
-                    onClick={() => handleRelinkClick(sample.sampleId)}
-                    type="button"
-                  >
-                    Relink
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        <div className={styles.footerSection}>
-          <p className={styles.footerSectionLabel}>Output</p>
-          <button
-            aria-busy={isArrangementExporting}
-            className={styles.footerButton}
-            disabled={isArrangementExporting}
-            onClick={onArrangementExport}
+            disabled={isProjectFileProcessing || isArrangementExporting}
+            onClick={() => {
+              setIsClipAddMenuOpen(false);
+              setOpenClipActionMenuId(null);
+              setIsExportMenuOpen((isOpen) => !isOpen);
+            }}
             type="button"
           >
             <Icon name="ios_share" />
             <span>
-              {isArrangementExporting ? "Exporting..." : "Export Arrangement WAV"}
+              {isProjectFileProcessing || isArrangementExporting
+                ? "Exporting..."
+                : "Export"}
             </span>
           </button>
+          {isExportMenuOpen ? (
+            <div className={styles.exportMenu} role="menu">
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleProjectJsonExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="description" />
+                <span>Export Project JSON</span>
+              </button>
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleProjectBundleExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="folder_zip" />
+                <span>Export Project Bundle</span>
+              </button>
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleArrangementExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="graphic_eq" />
+                <span>Export Arrangement WAV</span>
+              </button>
+            </div>
+          ) : null}
         </div>
+
+        <button
+          className={styles.footerButton}
+          disabled={isProjectFileProcessing}
+          onClick={handleProjectFileImportClick}
+          type="button"
+        >
+          <Icon name="upload_file" />
+          <span>
+            {isProjectFileProcessing ? "Processing..." : "Import Project File"}
+          </span>
+        </button>
+        <input
+          ref={projectFileInputRef}
+          accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
+          className={styles.hiddenFileInput}
+          onChange={handleProjectFileChange}
+          type="file"
+        />
+        <input
+          ref={relinkFileInputRef}
+          accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
+          className={styles.hiddenFileInput}
+          onChange={handleRelinkFileChange}
+          type="file"
+        />
         <button className={styles.footerButton} type="button">
           <Icon name="settings" />
           <span>Settings</span>
         </button>
+        {projectFileNotice ? (
+          <p className={styles.fileNotice}>{projectFileNotice}</p>
+        ) : null}
+        {projectFileError ? (
+          <p className={styles.exportError}>{projectFileError}</p>
+        ) : null}
         {arrangementExportError ? (
           <p className={styles.exportError}>{arrangementExportError}</p>
+        ) : null}
+        {missingImportedSamples.length > 0 ? (
+          <div className={styles.missingSamples}>
+            <p className={styles.missingSamplesTitle}>Missing samples</p>
+            {missingImportedSamples.map((sample) => (
+              <div className={styles.missingSampleItem} key={sample.sampleId}>
+                <span title={sample.fileName ?? sample.name}>{sample.name}</span>
+                <button
+                  className={styles.relinkButton}
+                  disabled={isProjectFileProcessing}
+                  onClick={() => handleRelinkClick(sample.sampleId)}
+                  type="button"
+                >
+                  Relink
+                </button>
+              </div>
+            ))}
+          </div>
         ) : null}
       </div>
     </aside>
