@@ -9,6 +9,7 @@ import type {
 } from "../model";
 import {
   DEFAULT_ARRANGEMENT_LENGTH_BARS,
+  normalizeTrackMixerState,
   normalizeArrangementLengthBars,
 } from "../model";
 
@@ -129,7 +130,9 @@ export function createPersistedProjectDocument({
     sampleMetas: [...sampleMetas],
     savedAt,
     tempoBpm,
-    trackMixerStates: trackMixerStates.map((state) => ({ ...state })),
+    trackMixerStates: trackMixerStates.map((state) =>
+      normalizeTrackMixerState(state),
+    ),
     version: PROJECT_DOCUMENT_VERSION,
   };
 }
@@ -266,6 +269,9 @@ export function migratePersistedProjectDocument(
         : DEFAULT_ARRANGEMENT_LENGTH_BARS,
     createdAt:
       typeof value.createdAt === "number" ? value.createdAt : value.savedAt,
+    trackMixerStates: value.trackMixerStates
+      .filter((state): state is TrackMixerState => isRecord(state))
+      .map((state) => normalizeTrackMixerState(state)),
   };
 }
 

@@ -6,6 +6,7 @@
   min-height: 196px;
   min-width: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .header {
@@ -23,7 +24,12 @@
 .faderLabel,
 .volumeValue,
 .masterLabel,
-.effectSlot {
+.effectSlotSelect,
+.effectPanelButton,
+.effectPanelEyebrow,
+.effectPanelTitle,
+.effectLabel,
+.effectValue {
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-label);
   letter-spacing: var(--letter-spacing-label);
@@ -85,7 +91,12 @@
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   min-height: 142px;
   padding: var(--space-gutter);
-  width: 112px;
+  position: relative;
+  width: 132px;
+}
+
+.channelStripWithPopup {
+  z-index: var(--z-index-popover);
 }
 
 .inactiveStrip {
@@ -183,11 +194,14 @@
   color: var(--color-text-dim);
   display: flex;
   justify-content: center;
+  margin: 0;
   min-height: 26px;
 }
 
 .toggleButton,
-.effectSlot {
+.effectSlotSelect,
+.effectPanelButton,
+.effectPanelCloseButton {
   background: var(--color-surface-container);
   border: 1px solid var(--color-outline-variant);
   border-radius: var(--radius-xs);
@@ -198,8 +212,12 @@
 
 .toggleButton:hover,
 .toggleButton:focus-visible,
-.effectSlot:hover,
-.effectSlot:focus-visible {
+.effectSlotSelect:hover,
+.effectSlotSelect:focus-visible,
+.effectPanelButton:hover,
+.effectPanelButton:focus-visible,
+.effectPanelCloseButton:hover,
+.effectPanelCloseButton:focus-visible {
   border-color: var(--color-outline);
   color: var(--color-text);
 }
@@ -216,14 +234,143 @@
   color: var(--color-on-primary);
 }
 
-.effectSlot {
+.effectPanelButton:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.effectSpacer {
+  min-height: 26px;
+}
+
+.effectSlotControl {
+  display: grid;
+  gap: var(--space-unit);
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.effectSlotSelect {
+  min-width: 0;
   overflow: hidden;
   padding: 0 var(--space-unit);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.effectSlot:disabled {
-  cursor: default;
-  opacity: 0.7;
+.effectPanelButton {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.effectParameterPanel {
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--panel-inset-shadow);
+  display: grid;
+  gap: var(--space-gutter);
+  max-height: 230px;
+  min-height: 180px;
+  overflow-y: auto;
+  padding: var(--space-gutter);
+  position: absolute;
+  top: 0;
+  width: 220px;
+  z-index: var(--z-index-popover);
+}
+
+.effectParameterPanelRight {
+  left: calc(100% + var(--space-gutter));
+}
+
+.effectParameterPanelLeft {
+  right: calc(100% + var(--space-gutter));
+}
+
+.effectPanelHeader {
+  align-items: start;
+  border-bottom: 1px solid var(--color-outline-variant);
+  display: flex;
+  gap: var(--space-gutter);
+  justify-content: space-between;
+  padding-bottom: var(--space-gutter);
+}
+
+.effectPanelEyebrow,
+.effectPanelTitle {
+  margin: 0;
+}
+
+.effectPanelEyebrow,
+.effectLabel,
+.effectValue {
+  color: var(--color-text-dim);
+}
+
+.effectPanelTitle {
+  color: var(--color-primary);
+  margin-top: 2px;
+}
+
+.effectPanelCloseButton {
+  min-height: 22px;
+  min-width: 22px;
+  padding: 0;
+}
+
+.effectField {
+  color: var(--color-text-muted);
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.effectLabel {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.effectValue {
+  color: var(--color-primary);
+}
+
+.effectSelect,
+.effectRange {
+  accent-color: var(--color-primary);
+}
+
+.effectSelect {
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-xs);
+  color: var(--color-text);
+  font: inherit;
+  min-height: 22px;
+  min-width: 0;
+  padding: 0 var(--space-unit);
+}
+
+.effectSelect:focus-visible,
+.effectRange:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.effectRange {
+  cursor: pointer;
+  width: 100%;
+}
+
+.effectToggle {
+  align-items: center;
+  color: var(--color-text-muted);
+  display: flex;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  gap: var(--space-unit);
+  letter-spacing: var(--letter-spacing-label);
+  text-transform: uppercase;
 }

@@ -1,11 +1,30 @@
-import type { CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 
 import type { MixerLevelSnapshot } from "../../audio";
 import {
+  DELAY_MAX_FEEDBACK,
+  DELAY_MAX_TIME_SECONDS,
+  DELAY_MIN_FEEDBACK,
+  DELAY_MIN_TIME_SECONDS,
+  DISTORTION_MAX_DRIVE,
+  DISTORTION_MIN_DRIVE,
+  EFFECT_MAX_WET_MIX,
+  EFFECT_MIN_WET_MIX,
+  FILTER_MAX_FREQUENCY_HZ,
+  FILTER_MAX_Q,
+  FILTER_MIN_FREQUENCY_HZ,
+  FILTER_MIN_Q,
   MIXER_MAX_VOLUME_DB,
   MIXER_MIN_VOLUME_DB,
+  createTrackEffectState,
   getTrackMixerState,
+  normalizeDelayEffectParameters,
+  normalizeDistortionEffectParameters,
+  normalizeFilterEffectParameters,
+  updateTrackEffectState,
   type MasterMixerState,
+  type TrackEffectKind,
+  type TrackEffectState,
   type TrackMixerState,
 } from "../../model";
 import styles from "./MixerPanel.module.css";
@@ -20,6 +39,7 @@ interface MixerPanelProps {
   masterMixerState: MasterMixerState;
   mixerLevels: MixerLevelSnapshot;
   onMasterVolumeChange: (volumeDb: number) => void;
+  onTrackEffectChange: (trackId: string, effectSlot: TrackEffectState) => void;
   onTrackMuteToggle: (trackId: string) => void;
   onTrackSoloToggle: (trackId: string) => void;
   onTrackVolumeChange: (trackId: string, volumeDb: number) => void;
@@ -36,19 +56,33 @@ interface MixerChannel {
   state: MasterMixerState | TrackMixerState;
 }
 
+type EffectPopupPlacement = "left" | "right";
+
+interface OpenEffectPopup {
+  placement: EffectPopupPlacement;
+  trackId: string;
+}
+
 const MASTER_CHANNEL_ID = "master";
 const FADER_STEP_DB = 1;
+const EFFECT_PANEL_WIDTH_PX = 220;
+const EFFECT_PANEL_GAP_PX = 8;
 
 export function MixerPanel({
   masterMixerState,
   mixerLevels,
   onMasterVolumeChange,
+  onTrackEffectChange,
   onTrackMuteToggle,
   onTrackSoloToggle,
   onTrackVolumeChange,
   tracks,
   trackMixerStates,
 }: MixerPanelProps) {
+  const stripScrollerRef = useRef<HTMLDivElement>(null);
+  const [openEffectPopup, setOpenEffectPopup] =
+    useState<OpenEffectPopup | null>(null);
+  const openEffectTrackId = openEffectPopup?.trackId ?? null;
   const mixerChannels: MixerChannel[] = [
     ...tracks.map((track) => ({
       active: track.active,
@@ -68,6 +102,39 @@ export function MixerPanel({
     },
   ];
 
+  function getEffectPopupPlacement(
+    sourceElement: HTMLElement,
+  ): EffectPopupPlacement {
+    const stripElement = sourceElement.closest<HTMLElement>(
+      "[data-mixer-channel-strip]",
+    );
+    const stripRect =
+      stripElement?.getBoundingClientRect() ??
+      sourceElement.getBoundingClientRect();
+    const scrollerRect = stripScrollerRef.current?.getBoundingClientRect();
+
+    if (!scrollerRect) {
+      return "right";
+    }
+
+    const requiredSpace = EFFECT_PANEL_WIDTH_PX + EFFECT_PANEL_GAP_PX;
+    const rightSpace = scrollerRect.right - stripRect.right;
+    const leftSpace = stripRect.left - scrollerRect.left;
+
+    if (rightSpace < requiredSpace && leftSpace >= requiredSpace) {
+      return "left";
+    }
+
+    return "right";
+  }
+
+  function openEffectPopupForTrack(trackId: string, sourceElement: HTMLElement) {
+    setOpenEffectPopup({
+      placement: getEffectPopupPlacement(sourceElement),
+      trackId,
+    });
+  }
+
   return (
     <section className={styles.mixerPanel} aria-label="Arrangement mixer panel">
       <header className={styles.header}>
@@ -77,7 +144,7 @@ export function MixerPanel({
         <p className={styles.statusText}>Live routing / runtime meters</p>
       </header>
 
-      <div className={styles.stripScroller}>
+      <div className={styles.stripScroller} ref={stripScrollerRef}>
         <div className={styles.stripRow}>
           {mixerChannels.map((channel) => {
             const isTrackChannel = channel.role === "track";
@@ -90,8 +157,13 @@ export function MixerPanel({
               <article
                 className={`${styles.channelStrip} ${
                   channel.role === "master" ? styles.masterStrip : ""
-                } ${channel.active ? "" : styles.inactiveStrip}`}
+                } ${channel.active ? "" : styles.inactiveStrip} ${
+                  openEffectTrackId === channel.id
+                    ? styles.channelStripWithPopup
+                    : ""
+                }`}
                 key={channel.id}
+                data-mixer-channel-strip="true"
               >
                 <header className={styles.channelHeader}>
                   <span className={styles.trackName}>{channel.name}</span>
@@ -158,21 +230,410 @@ export function MixerPanel({
                   <p className={styles.masterLabel}>MASTER OUT</p>
                 )}
 
-                <button
-                  aria-disabled="true"
-                  aria-label={`${channel.name} effect placeholder`}
-                  className={styles.effectSlot}
-                  disabled
-                  type="button"
-                >
-                  FX: None
-                </button>
+                {trackState ? (
+                  <EffectSlotControl
+                    channelName={channel.name}
+                    effectSlot={trackState.effectSlot}
+                    isOpen={openEffectTrackId === channel.id}
+                    onEffectSelect={(effectSlot, sourceElement) => {
+                      onTrackEffectChange(channel.id, effectSlot);
+                      if (effectSlot.kind === "none") {
+                        setOpenEffectPopup(null);
+                        return;
+                      }
+
+                      openEffectPopupForTrack(channel.id, sourceElement);
+                    }}
+                    onPanelToggle={(sourceElement) => {
+                      setOpenEffectPopup((currentPopup) => {
+                        if (currentPopup?.trackId === channel.id) {
+                          return null;
+                        }
+
+                        return {
+                          placement: getEffectPopupPlacement(sourceElement),
+                          trackId: channel.id,
+                        };
+                      });
+                    }}
+                  />
+                ) : (
+                  <div className={styles.effectSpacer} aria-hidden="true" />
+                )}
+                {trackState &&
+                openEffectPopup &&
+                openEffectPopup.trackId === channel.id &&
+                trackState.effectSlot.kind !== "none" ? (
+                  <EffectParameterPanel
+                    channelName={channel.name}
+                    effectSlot={trackState.effectSlot}
+                    placement={openEffectPopup.placement}
+                    onClose={() => setOpenEffectPopup(null)}
+                    onEffectChange={(effectSlot) =>
+                      onTrackEffectChange(channel.id, effectSlot)
+                    }
+                  />
+                ) : null}
               </article>
             );
           })}
         </div>
       </div>
     </section>
+  );
+}
+
+function EffectSlotControl({
+  channelName,
+  effectSlot,
+  isOpen,
+  onEffectSelect,
+  onPanelToggle,
+}: {
+  channelName: string;
+  effectSlot: TrackEffectState;
+  isOpen: boolean;
+  onEffectSelect: (
+    effectSlot: TrackEffectState,
+    sourceElement: HTMLElement,
+  ) => void;
+  onPanelToggle: (sourceElement: HTMLElement) => void;
+}) {
+  return (
+    <div className={styles.effectSlotControl}>
+      <select
+        aria-label={`${channelName} effect type`}
+        className={styles.effectSlotSelect}
+        onChange={(event) =>
+          onEffectSelect(
+            createTrackEffectState(event.currentTarget.value as TrackEffectKind),
+            event.currentTarget,
+          )
+        }
+        value={effectSlot.kind}
+      >
+        <option value="none">No FX</option>
+        <option value="filter">Filter</option>
+        <option value="delay">Delay</option>
+        <option value="distortion">Distort</option>
+      </select>
+      <button
+        aria-expanded={isOpen}
+        aria-label={`Open ${channelName} effect controls`}
+        className={styles.effectPanelButton}
+        disabled={effectSlot.kind === "none"}
+        onClick={(event) => onPanelToggle(event.currentTarget)}
+        type="button"
+      >
+        ...
+      </button>
+    </div>
+  );
+}
+
+function EffectParameterPanel({
+  channelName,
+  effectSlot,
+  placement,
+  onClose,
+  onEffectChange,
+}: {
+  channelName: string;
+  effectSlot: TrackEffectState;
+  placement: EffectPopupPlacement;
+  onClose: () => void;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  return (
+    <aside
+      aria-label={`${channelName} effect controls`}
+      className={`${styles.effectParameterPanel} ${
+        placement === "left"
+          ? styles.effectParameterPanelLeft
+          : styles.effectParameterPanelRight
+      }`}
+    >
+      <header className={styles.effectPanelHeader}>
+        <div>
+          <p className={styles.effectPanelEyebrow}>{channelName}</p>
+          <h3 className={styles.effectPanelTitle}>
+            {formatEffectKind(effectSlot.kind)}
+          </h3>
+        </div>
+        <button
+          aria-label="Close effect controls"
+          className={styles.effectPanelCloseButton}
+          onClick={onClose}
+          type="button"
+        >
+          x
+        </button>
+      </header>
+
+      <label className={styles.effectToggle}>
+        <input
+          checked={effectSlot.enabled}
+          onChange={(event) =>
+            onEffectChange(
+              updateTrackEffectState(effectSlot, {
+                enabled: event.currentTarget.checked,
+              }),
+            )
+          }
+          type="checkbox"
+        />
+        <span>On</span>
+      </label>
+
+      {effectSlot.kind === "filter" ? (
+        <FilterEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+      {effectSlot.kind === "delay" ? (
+        <DelayEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+      {effectSlot.kind === "distortion" ? (
+        <DistortionEffectControls
+          effectSlot={effectSlot}
+          onEffectChange={onEffectChange}
+        />
+      ) : null}
+    </aside>
+  );
+}
+
+function FilterEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeFilterEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <label className={styles.effectField}>
+        <span className={styles.effectLabel}>Type</span>
+        <select
+          className={styles.effectSelect}
+          onChange={(event) =>
+            onEffectChange(
+              updateTrackEffectState(effectSlot, {
+                parameters: {
+                  ...parameters,
+                  type:
+                    event.currentTarget.value === "highpass"
+                      ? "highpass"
+                      : "lowpass",
+                },
+              }),
+            )
+          }
+          value={parameters.type}
+        >
+          <option value="lowpass">Low-Pass</option>
+          <option value="highpass">High-Pass</option>
+        </select>
+      </label>
+      <EffectRange
+        label="Cut"
+        max={FILTER_MAX_FREQUENCY_HZ}
+        min={FILTER_MIN_FREQUENCY_HZ}
+        onChange={(frequencyHz) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                frequencyHz,
+              },
+            }),
+          )
+        }
+        step={10}
+        value={parameters.frequencyHz}
+        valueLabel={`${Math.round(parameters.frequencyHz)} Hz`}
+      />
+      <EffectRange
+        label="Resonance"
+        max={FILTER_MAX_Q}
+        min={FILTER_MIN_Q}
+        onChange={(q) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                q,
+              },
+            }),
+          )
+        }
+        step={0.1}
+        value={parameters.q}
+        valueLabel={parameters.q.toFixed(1)}
+      />
+    </>
+  );
+}
+
+function DelayEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeDelayEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <EffectRange
+        label="Time"
+        max={DELAY_MAX_TIME_SECONDS}
+        min={DELAY_MIN_TIME_SECONDS}
+        onChange={(delayTimeSeconds) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                delayTimeSeconds,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.delayTimeSeconds}
+        valueLabel={`${parameters.delayTimeSeconds.toFixed(2)}s`}
+      />
+      <EffectRange
+        label="Feedback"
+        max={DELAY_MAX_FEEDBACK}
+        min={DELAY_MIN_FEEDBACK}
+        onChange={(feedback) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                feedback,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.feedback}
+        valueLabel={`${Math.round(parameters.feedback * 100)}%`}
+      />
+      <EffectRange
+        label="Wet"
+        max={EFFECT_MAX_WET_MIX}
+        min={EFFECT_MIN_WET_MIX}
+        onChange={(wetMix) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                wetMix,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.wetMix}
+        valueLabel={`${Math.round(parameters.wetMix * 100)}%`}
+      />
+    </>
+  );
+}
+
+function DistortionEffectControls({
+  effectSlot,
+  onEffectChange,
+}: {
+  effectSlot: TrackEffectState;
+  onEffectChange: (effectSlot: TrackEffectState) => void;
+}) {
+  const parameters = normalizeDistortionEffectParameters(effectSlot.parameters);
+
+  return (
+    <>
+      <EffectRange
+        label="Drive"
+        max={DISTORTION_MAX_DRIVE}
+        min={DISTORTION_MIN_DRIVE}
+        onChange={(drive) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                drive,
+              },
+            }),
+          )
+        }
+        step={0.1}
+        value={parameters.drive}
+        valueLabel={parameters.drive.toFixed(1)}
+      />
+      <EffectRange
+        label="Wet"
+        max={EFFECT_MAX_WET_MIX}
+        min={EFFECT_MIN_WET_MIX}
+        onChange={(wetMix) =>
+          onEffectChange(
+            updateTrackEffectState(effectSlot, {
+              parameters: {
+                ...parameters,
+                wetMix,
+              },
+            }),
+          )
+        }
+        step={0.01}
+        value={parameters.wetMix}
+        valueLabel={`${Math.round(parameters.wetMix * 100)}%`}
+      />
+    </>
+  );
+}
+
+function EffectRange({
+  label,
+  max,
+  min,
+  onChange,
+  step,
+  value,
+  valueLabel,
+}: {
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: number) => void;
+  step: number;
+  value: number;
+  valueLabel: string;
+}) {
+  return (
+    <label className={styles.effectField}>
+      <span className={styles.effectLabel}>
+        {label}
+        <span className={styles.effectValue}>{valueLabel}</span>
+      </span>
+      <input
+        className={styles.effectRange}
+        max={max}
+        min={min}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+        step={step}
+        type="range"
+        value={value}
+      />
+    </label>
   );
 }
 
@@ -200,4 +661,12 @@ function formatVolumeDb(volumeDb: number): string {
   }
 
   return `${volumeDb > 0 ? "+" : ""}${volumeDb.toFixed(0)} dB`;
+}
+
+function formatEffectKind(effectKind: TrackEffectKind): string {
+  if (effectKind === "distortion") {
+    return "Distort";
+  }
+
+  return effectKind[0]!.toUpperCase() + effectKind.slice(1);
 }

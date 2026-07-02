@@ -78,6 +78,7 @@ import {
   type PitchedInstrumentId,
   type SampleMeta,
   type TrackMixerState,
+  type TrackEffectState,
 } from "../model";
 import {
   createIndexedDbProjectStore,
@@ -714,6 +715,15 @@ export function App() {
         solo: !(currentState?.solo ?? false),
       });
     });
+  }
+
+  function handleTrackEffectChange(
+    trackId: string,
+    effectSlot: TrackEffectState,
+  ) {
+    setTrackMixerStates((currentStates) =>
+      updateTrackMixerState(currentStates, trackId, { effectSlot }),
+    );
   }
 
   function handleMasterVolumeChange(volumeDb: number) {
@@ -2212,6 +2222,7 @@ export function App() {
               onClipInstanceSelect={setSelectedClipInstanceId}
               onLoopRangeChange={handleArrangementLoopRangeChange}
               onMasterVolumeChange={handleMasterVolumeChange}
+              onTrackEffectChange={handleTrackEffectChange}
               onTrackMuteToggle={handleTrackMuteToggle}
               onTrackSoloToggle={handleTrackSoloToggle}
               onTrackVolumeChange={handleTrackVolumeChange}
