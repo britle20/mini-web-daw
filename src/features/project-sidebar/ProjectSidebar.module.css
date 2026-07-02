@@ -164,6 +164,7 @@
   display: flex;
   flex-shrink: 0;
   gap: var(--space-unit);
+  position: relative;
 }
 
 .iconButton,
@@ -198,6 +199,45 @@
 .instrumentRemoveButton:disabled:hover {
   background: transparent;
   color: var(--color-text-dim);
+}
+
+.clipActionMenu {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--panel-inset-shadow), 0 10px 24px rgb(0 0 0 / 32%);
+  display: grid;
+  gap: var(--space-unit);
+  min-width: 140px;
+  padding: var(--space-unit);
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-unit));
+  z-index: var(--z-index-popover);
+}
+
+.clipActionMenuItem {
+  align-items: center;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-gutter);
+  min-height: 30px;
+  padding: 0 var(--space-gutter);
+  text-align: left;
+  width: 100%;
+}
+
+.clipActionMenuItem:hover,
+.clipActionMenuItem:focus-visible {
+  background: var(--color-surface-container-high);
+  color: var(--color-text);
+}
+
+.clipActionMenuDangerItem {
+  color: var(--color-error);
 }
 
 .renameForm {
