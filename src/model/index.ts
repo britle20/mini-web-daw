@@ -77,6 +77,11 @@ export {
   validateImportedWavFile,
 } from "./audio-clip";
 export {
+  createDuplicatedClipId,
+  createDuplicatedClipName,
+  duplicateClip,
+} from "./clip-duplication";
+export {
   DELAY_MAX_FEEDBACK,
   DELAY_MAX_TIME_SECONDS,
   DELAY_MIN_FEEDBACK,

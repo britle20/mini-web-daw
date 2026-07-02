@@ -32,6 +32,7 @@ interface ProjectSidebarProps {
   onArrangementExport: () => void;
   onClipAdd: () => void;
   onClipDelete: (clipId: string) => void;
+  onClipDuplicate: (clipId: string) => void;
   onClipImport: (file: File) => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
@@ -52,6 +53,7 @@ export function ProjectSidebar({
   onArrangementExport,
   onClipAdd,
   onClipDelete,
+  onClipDuplicate,
   onClipImport,
   onClipRename,
   onClipSelect,
@@ -312,6 +314,14 @@ export function ProjectSidebar({
                     type="button"
                   >
                     <Icon name="edit" />
+                  </button>
+                  <button
+                    aria-label={`Duplicate ${clip.name}`}
+                    className={styles.iconButton}
+                    onClick={() => onClipDuplicate(clip.id)}
+                    type="button"
+                  >
+                    <Icon name="content_copy" />
                   </button>
                   {isHybrid ? (
                     <button

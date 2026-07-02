@@ -318,6 +318,37 @@ export function renameClip<TClip extends { name: string }>({
   };
 }
 
+export function duplicateHybridClip({
+  clip,
+  id,
+  name,
+}: {
+  clip: HybridClip;
+  id: string;
+  name: string;
+}): HybridClip {
+  return {
+    ...clip,
+    drumEvents: clip.drumEvents.map((event) => ({
+      ...event,
+      id: createDrumEventId(id, event.laneId, event.startTick),
+    })),
+    drumLanes: cloneDrumLanes(clip.drumLanes),
+    id,
+    name,
+    noteEvents: clip.noteEvents.map((event) => ({
+      ...event,
+      id: createNoteEventId(
+        id,
+        event.instrumentId,
+        event.midiNote,
+        event.startTick,
+      ),
+    })),
+    pitchedInstrumentIds: [...clip.pitchedInstrumentIds],
+  };
+}
+
 export function addPitchedInstrumentToClip({
   clip,
   instrumentId,
