@@ -35,15 +35,16 @@ interface ProjectSidebarProps {
   isProjectFileProcessing?: boolean;
   missingImportedSamples?: readonly MissingImportedSampleItem[];
   projectFileError?: string | null;
-  projectFileNotice?: string | null;
   projectName: string;
   selectedClipId: string;
   selectedInstrumentId: InstrumentId;
   onArrangementExport: () => void;
+  onArrangementExportErrorDismiss: () => void;
   onClipAdd: () => void;
   onClipDelete: (clipId: string) => void;
   onClipDuplicate: (clipId: string) => void;
   onClipImport: (file: File) => void;
+  onClipImportErrorDismiss: () => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
   onImportedSampleRelink: (sampleId: string, file: File) => void;
@@ -52,6 +53,7 @@ interface ProjectSidebarProps {
   onInstrumentSelect: (clipId: string, instrumentId: InstrumentId) => void;
   onProjectBundleExport: () => void;
   onProjectFileImport: (file: File) => void;
+  onProjectFileErrorDismiss: () => void;
   onProjectJsonExport: () => void;
 }
 
@@ -64,15 +66,16 @@ export function ProjectSidebar({
   isProjectFileProcessing = false,
   missingImportedSamples = [],
   projectFileError = null,
-  projectFileNotice = null,
   projectName,
   selectedClipId,
   selectedInstrumentId,
   onArrangementExport,
+  onArrangementExportErrorDismiss,
   onClipAdd,
   onClipDelete,
   onClipDuplicate,
   onClipImport,
+  onClipImportErrorDismiss,
   onClipRename,
   onClipSelect,
   onImportedSampleRelink,
@@ -81,6 +84,7 @@ export function ProjectSidebar({
   onInstrumentSelect,
   onProjectBundleExport,
   onProjectFileImport,
+  onProjectFileErrorDismiss,
   onProjectJsonExport,
 }: ProjectSidebarProps) {
   const clipFileInputRef = useRef<HTMLInputElement>(null);
@@ -343,7 +347,10 @@ export function ProjectSidebar({
           </div>
         </div>
         {clipImportError ? (
-          <p className={styles.importError}>{clipImportError}</p>
+          <DismissibleError
+            message={clipImportError}
+            onDismiss={onClipImportErrorDismiss}
+          />
         ) : null}
 
         {clips.map((clip) => {
@@ -646,14 +653,17 @@ export function ProjectSidebar({
           <Icon name="settings" />
           <span>Settings</span>
         </button>
-        {projectFileNotice ? (
-          <p className={styles.fileNotice}>{projectFileNotice}</p>
-        ) : null}
         {projectFileError ? (
-          <p className={styles.exportError}>{projectFileError}</p>
+          <DismissibleError
+            message={projectFileError}
+            onDismiss={onProjectFileErrorDismiss}
+          />
         ) : null}
         {arrangementExportError ? (
-          <p className={styles.exportError}>{arrangementExportError}</p>
+          <DismissibleError
+            message={arrangementExportError}
+            onDismiss={onArrangementExportErrorDismiss}
+          />
         ) : null}
         {missingImportedSamples.length > 0 ? (
           <div className={styles.missingSamples}>
@@ -675,5 +685,27 @@ export function ProjectSidebar({
         ) : null}
       </div>
     </aside>
+  );
+}
+
+function DismissibleError({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className={styles.dismissibleError} role="alert">
+      <span>{message}</span>
+      <button
+        aria-label="Dismiss error"
+        className={styles.dismissErrorButton}
+        onClick={onDismiss}
+        type="button"
+      >
+        <Icon name="close" />
+      </button>
+    </div>
   );
 }

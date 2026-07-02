@@ -112,6 +112,11 @@ const AUTOSAVE_DEBOUNCE_MS = 600;
 
 type PersistenceStatus = "error" | "loading" | "saved" | "saving";
 
+interface ToastMessage {
+  id: number;
+  message: string;
+}
+
 type PendingConfirmation =
   | {
       clipId: string;
@@ -331,10 +336,11 @@ export function App() {
   >(null);
   const [isProjectFileProcessing, setIsProjectFileProcessing] = useState(false);
   const [projectFileError, setProjectFileError] = useState<string | null>(null);
-  const [projectFileNotice, setProjectFileNotice] = useState<string | null>(null);
   const [missingImportedSampleIds, setMissingImportedSampleIds] = useState<
     string[]
   >([]);
+  const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
+  const toastMessageIdRef = useRef(0);
   const [isPersistenceReady, setIsPersistenceReady] = useState(false);
   const [persistenceStatus, setPersistenceStatus] =
     useState<PersistenceStatus>("loading");
@@ -427,6 +433,20 @@ export function App() {
   useEffect(() => {
     projectNameRef.current = projectName;
   }, [projectName]);
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToastMessage((currentMessage) =>
+        currentMessage?.id === toastMessage.id ? null : currentMessage,
+      );
+    }, 2600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [toastMessage]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -818,6 +838,14 @@ export function App() {
   function reportPersistenceError(message: string) {
     setPersistenceStatus("error");
     setPersistenceError(message);
+  }
+
+  function showToast(message: string) {
+    toastMessageIdRef.current += 1;
+    setToastMessage({
+      id: toastMessageIdRef.current,
+      message,
+    });
   }
 
   function reportMissingImportedSampleIds(missingSampleIds: readonly string[]) {
@@ -1626,7 +1654,6 @@ export function App() {
         error instanceof Error ? error.message : "Only WAV files can be imported.";
 
       setClipImportError(message);
-      setAudioError(message);
       return;
     }
 
@@ -1685,7 +1712,6 @@ export function App() {
           : "Failed to import the selected WAV file.";
 
       setClipImportError(message);
-      setAudioError(message);
     } finally {
       setIsClipImporting(false);
     }
@@ -1718,12 +1744,12 @@ export function App() {
         exportResult.blob,
         createArrangementExportFileName(projectNameRef.current),
       );
+      showToast("Arrangement WAV exported.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Arrangement WAV export failed.";
 
       setArrangementExportError(message);
-      setAudioError(message);
     } finally {
       setIsArrangementExporting(false);
     }
@@ -1735,7 +1761,6 @@ export function App() {
     }
 
     setProjectFileError(null);
-    setProjectFileNotice(null);
     setIsProjectFileProcessing(true);
 
     try {
@@ -1745,6 +1770,7 @@ export function App() {
         createProjectJsonBlob(project),
         createProjectJsonFileName(project.name),
       );
+      showToast("Project JSON exported.");
     } catch (error) {
       setProjectFileError(
         error instanceof Error ? error.message : "Project JSON export failed.",
@@ -1760,7 +1786,6 @@ export function App() {
     }
 
     setProjectFileError(null);
-    setProjectFileNotice(null);
     setIsProjectFileProcessing(true);
 
     try {
@@ -1771,6 +1796,7 @@ export function App() {
       });
 
       downloadBlob(bundleBlob, createProjectBundleFileName(project.name));
+      showToast("Project bundle exported.");
     } catch (error) {
       setProjectFileError(
         error instanceof Error ? error.message : "Project bundle export failed.",
@@ -1786,7 +1812,6 @@ export function App() {
     }
 
     setProjectFileError(null);
-    setProjectFileNotice(null);
     setIsProjectFileProcessing(true);
 
     try {
@@ -1834,7 +1859,7 @@ export function App() {
           ? ` ${missingCount} imported WAV ${missingCount === 1 ? "is" : "are"} missing or mismatched and need relinking.`
           : "";
 
-      setProjectFileNotice(`Imported ${importedProject.name}.${warning}`);
+      showToast(`Imported ${importedProject.name}.${warning}`);
     } catch (error) {
       setProjectFileError(
         error instanceof Error ? error.message : "Project file import failed.",
@@ -1850,7 +1875,6 @@ export function App() {
     }
 
     setProjectFileError(null);
-    setProjectFileNotice(null);
     setAudioError(null);
     setIsProjectFileProcessing(true);
 
@@ -1922,13 +1946,12 @@ export function App() {
       setMissingImportedSampleIds(nextMissingSampleIds);
       reportMissingImportedSampleIds(nextMissingSampleIds);
       await saveCurrentProjectNow();
-      setProjectFileNotice(`Relinked ${sampleMeta.name}.`);
+      showToast(`Relinked ${sampleMeta.name}.`);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Imported sample relink failed.";
 
       setProjectFileError(message);
-      setAudioError(message);
     } finally {
       setIsProjectFileProcessing(false);
     }
@@ -2745,10 +2768,12 @@ export function App() {
           isProjectFileProcessing={isProjectFileProcessing}
           missingImportedSamples={missingImportedSamples}
           onArrangementExport={handleArrangementWavExport}
+          onArrangementExportErrorDismiss={() => setArrangementExportError(null)}
           onClipAdd={handleClipAdd}
           onClipDelete={handleClipDelete}
           onClipDuplicate={handleClipDuplicate}
           onClipImport={handleAudioClipImport}
+          onClipImportErrorDismiss={() => setClipImportError(null)}
           onClipRename={handleClipRename}
           onClipSelect={handleClipSelect}
           onImportedSampleRelink={handleImportedSampleRelink}
@@ -2757,9 +2782,9 @@ export function App() {
           onInstrumentSelect={handleInstrumentSelect}
           onProjectBundleExport={handleProjectBundleExport}
           onProjectFileImport={handleProjectFileImport}
+          onProjectFileErrorDismiss={() => setProjectFileError(null)}
           onProjectJsonExport={handleProjectJsonExport}
           projectFileError={projectFileError}
-          projectFileNotice={projectFileNotice}
           projectName={projectName}
           selectedClipId={selectedClip.id}
           selectedInstrumentId={selectedInstrumentId}
@@ -2903,6 +2928,13 @@ export function App() {
           )}
         </main>
       </div>
+
+      {toastMessage ? (
+        <div className={styles.toast} role="status" aria-live="polite">
+          <Icon name="check_circle" />
+          <span>{toastMessage.message}</span>
+        </div>
+      ) : null}
 
       {pendingConfirmation ? (
         <div

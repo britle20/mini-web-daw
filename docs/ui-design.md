@@ -385,6 +385,8 @@ The sidebar should keep footer actions compact. Use one `Export` button that ope
 Keep `Import Project File` as a separate footer action. It accepts app JSON or app-created ZIP bundles and creates a new local project.
 
 - Missing imported samples should appear as a compact list with one `Relink` action per sample.
+- Successful export, import, and relink actions may use short auto-dismissing toast feedback.
+- Failed export, import, and relink actions should stay visible as inline errors until the user dismisses them or retries.
 
 The top transport/status area should show minimal project save status such as loading, saving, saved, or save failed.
 

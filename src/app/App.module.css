@@ -29,6 +29,32 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
+.toast {
+  align-items: center;
+  background: var(--color-surface-container-high);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--panel-inset-shadow), 0 12px 28px rgb(0 0 0 / 36%);
+  color: var(--color-primary-strong);
+  display: flex;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  gap: var(--space-gutter);
+  max-width: min(360px, calc(100vw - var(--space-section)));
+  padding: var(--space-gutter) var(--space-panel);
+  position: fixed;
+  right: var(--space-panel);
+  top: calc(var(--top-bar-height) + var(--space-panel));
+  z-index: var(--z-index-popover);
+}
+
+.toast span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspaceHeader {
   align-items: center;
   background: var(--color-surface-container-low);
