@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   BUNDLED_DRUM_SAMPLES,
@@ -21,6 +21,7 @@ import {
   type TransportMode,
   type TransportState,
 } from "../features";
+import { Icon } from "../components";
 import {
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_ARRANGEMENT_LENGTH_BARS,
@@ -99,6 +100,42 @@ const AUTOSAVE_DEBOUNCE_MS = 600;
 
 type PersistenceStatus = "error" | "loading" | "saved" | "saving";
 
+type PendingConfirmation =
+  | {
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      kind: "clip-delete";
+      message: string;
+      title: string;
+    }
+  | {
+      barCount: HybridClipLengthBars;
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      kind: "clip-length-trim";
+      message: string;
+      title: string;
+    }
+  | {
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      instrumentId: PitchedInstrumentId;
+      kind: "instrument-remove";
+      message: string;
+      title: string;
+    }
+  | {
+      confirmLabel: string;
+      detail: string;
+      kind: "arrangement-length-trim";
+      lengthBars: number;
+      message: string;
+      title: string;
+    };
+
 function drumEventsToSampleLoopEvents(
   drumEvents: readonly DrumEvent[],
 ): SampleLoopEvent[] {
@@ -145,21 +182,6 @@ function createNextHybridClip(clips: readonly Clip[]): HybridClip {
     id: `clip-${nextClipNumber}`,
     name: `Clip ${nextClipNumber}`,
   });
-}
-
-function createNextProjectName(projectSummaries: readonly ProjectSummary[]): string {
-  const nextProjectNumber =
-    projectSummaries.reduce((highestProjectNumber, projectSummary) => {
-      const match = /^Project (\d+)$/u.exec(projectSummary.name);
-      const projectNumber = match ? Number.parseInt(match[1] ?? "", 10) : 0;
-
-      return Math.max(
-        highestProjectNumber,
-        Number.isNaN(projectNumber) ? 0 : projectNumber,
-      );
-    }, 0) + 1;
-
-  return `Project ${nextProjectNumber}`;
 }
 
 function createBlankProjectDocument({
@@ -275,6 +297,9 @@ export function App() {
   const [selectedClipInstanceId, setSelectedClipInstanceId] = useState<
     string | null
   >(null);
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<PendingConfirmation | null>(null);
+  const confirmationCancelButtonRef = useRef<HTMLButtonElement>(null);
   const [sampleMetas, setSampleMetas] = useState<SampleMeta[]>([]);
   const sampleMetasRef = useRef<SampleMeta[]>(sampleMetas);
   const [isClipImporting, setIsClipImporting] = useState(false);
@@ -578,6 +603,14 @@ export function App() {
       window.cancelAnimationFrame(animationFrameId);
     };
   }, [arrangementTracks, transportMode, transportState]);
+
+  useEffect(() => {
+    if (!pendingConfirmation) {
+      return;
+    }
+
+    confirmationCancelButtonRef.current?.focus();
+  }, [pendingConfirmation]);
 
   function commitSelectedClip(
     nextClip: HybridClip,
@@ -976,18 +1009,12 @@ export function App() {
     }
   }
 
-  function handleProjectCreate() {
-    const suggestedProjectName = createNextProjectName(projectSummariesRef.current);
-    const requestedProjectName = window.prompt(
-      "New project name",
-      suggestedProjectName,
-    );
+  function handleProjectCreate(projectName: string) {
+    const nextProjectName = projectName.trim();
 
-    if (requestedProjectName === null) {
+    if (!nextProjectName || isProjectOperationPending) {
       return;
     }
-
-    const nextProjectName = requestedProjectName.trim() || suggestedProjectName;
 
     void runProjectOperation(async () => {
       await saveCurrentProjectNow();
@@ -1015,19 +1042,14 @@ export function App() {
     });
   }
 
-  function handleProjectRename() {
-    const requestedProjectName = window.prompt(
-      "Rename project",
-      projectNameRef.current,
-    );
+  function handleProjectRename(projectName: string) {
+    const nextProjectName = projectName.trim();
 
-    if (requestedProjectName === null) {
-      return;
-    }
-
-    const nextProjectName = requestedProjectName.trim();
-
-    if (!nextProjectName || nextProjectName === projectNameRef.current) {
+    if (
+      !nextProjectName ||
+      nextProjectName === projectNameRef.current ||
+      isProjectOperationPending
+    ) {
       return;
     }
 
@@ -1047,17 +1069,8 @@ export function App() {
 
   function handleProjectDelete() {
     const projectId = activeProjectIdRef.current;
-    const name = projectNameRef.current;
 
     if (!projectId || isProjectOperationPending) {
-      return;
-    }
-
-    if (
-      !window.confirm(
-        `Delete "${name}"? This removes the browser-local project and its imported sample data.`,
-      )
-    ) {
       return;
     }
 
@@ -1270,22 +1283,50 @@ export function App() {
         lengthTicks,
       });
 
-    if (
-      shouldTrimEvents &&
-      !window.confirm(
-        `Shorten ${clip.name} to ${barCount} bar${
+    if (shouldTrimEvents) {
+      setPendingConfirmation({
+        barCount,
+        clipId: clip.id,
+        confirmLabel: "Shorten Clip",
+        detail: clip.name,
+        kind: "clip-length-trim",
+        message: `Shorten ${clip.name} to ${barCount} bar${
           barCount === 1 ? "" : "s"
         }? Events outside the new length will be removed or trimmed.`,
-      )
-    ) {
+        title: "Shorten Clip",
+      });
       return;
     }
+
+    applyClipLengthChange({
+      barCount,
+      clipId: clip.id,
+      trimEvents: false,
+    });
+  }
+
+  function applyClipLengthChange({
+    barCount,
+    clipId,
+    trimEvents,
+  }: {
+    barCount: HybridClipLengthBars;
+    clipId: string;
+    trimEvents: boolean;
+  }) {
+    const clip = clipsRef.current.find((candidate) => candidate.id === clipId);
+
+    if (!clip || !isHybridClip(clip)) {
+      return;
+    }
+
+    const lengthTicks = getHybridClipLengthTicks(barCount);
 
     try {
       const nextClip = updateHybridClipLength({
         clip,
         lengthTicks,
-        trimEvents: shouldTrimEvents,
+        trimEvents,
       });
 
       commitSelectedClip(nextClip, {
@@ -1598,7 +1639,80 @@ export function App() {
       clip,
     });
 
-    if (confirmationMessage && !window.confirm(confirmationMessage)) {
+    if (confirmationMessage) {
+      setPendingConfirmation({
+        clipId,
+        confirmLabel: "Delete Clip",
+        detail: clip.name,
+        kind: "clip-delete",
+        message: confirmationMessage,
+        title: "Delete Clip",
+      });
+      return;
+    }
+
+    deleteClipById(clipId);
+  }
+
+  function cancelConfirmation() {
+    setPendingConfirmation(null);
+  }
+
+  function confirmPendingAction() {
+    const confirmation = pendingConfirmation;
+
+    if (!confirmation) {
+      return;
+    }
+
+    setPendingConfirmation(null);
+
+    if (confirmation.kind === "clip-delete") {
+      deleteClipById(confirmation.clipId);
+      return;
+    }
+
+    if (confirmation.kind === "clip-length-trim") {
+      applyClipLengthChange({
+        barCount: confirmation.barCount,
+        clipId: confirmation.clipId,
+        trimEvents: true,
+      });
+      return;
+    }
+
+    if (confirmation.kind === "instrument-remove") {
+      removeInstrumentFromClip({
+        clipId: confirmation.clipId,
+        instrumentId: confirmation.instrumentId,
+        removeOwnedNotes: true,
+      });
+      return;
+    }
+
+    applyArrangementLengthChange(confirmation.lengthBars);
+  }
+
+  function handleConfirmationDialogKeyDown(event: KeyboardEvent) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    event.stopPropagation();
+    cancelConfirmation();
+  }
+
+  function deleteClipById(clipId: string) {
+    const currentClips = clipsRef.current;
+
+    if (currentClips.length <= 1) {
+      return;
+    }
+
+    const clipIndex = currentClips.findIndex((clip) => clip.id === clipId);
+    const clip = currentClips[clipIndex];
+
+    if (!clip) {
       return;
     }
 
@@ -1710,19 +1824,48 @@ export function App() {
       instrumentId,
     });
 
-    if (
-      hasOwnedNotes &&
-      !window.confirm(
-        "Remove this instrument and delete its piano roll notes from the clip?",
-      )
-    ) {
+    if (hasOwnedNotes) {
+      const instrumentName = getPitchedInstrument(instrumentId)?.name ?? instrumentId;
+
+      setPendingConfirmation({
+        clipId,
+        confirmLabel: "Remove Instrument",
+        detail: `${clip.name} / ${instrumentName}`,
+        instrumentId,
+        kind: "instrument-remove",
+        message:
+          "Remove this instrument and delete its piano roll notes from the clip?",
+        title: "Remove Instrument",
+      });
+      return;
+    }
+
+    removeInstrumentFromClip({
+      clipId,
+      instrumentId,
+      removeOwnedNotes: false,
+    });
+  }
+
+  function removeInstrumentFromClip({
+    clipId,
+    instrumentId,
+    removeOwnedNotes,
+  }: {
+    clipId: string;
+    instrumentId: PitchedInstrumentId;
+    removeOwnedNotes: boolean;
+  }) {
+    const clip = clipsRef.current.find((candidate) => candidate.id === clipId);
+
+    if (!clip || !isHybridClip(clip)) {
       return;
     }
 
     const nextClip = removePitchedInstrumentFromClip({
       clip,
       instrumentId,
-      removeOwnedNotes: hasOwnedNotes,
+      removeOwnedNotes,
     });
 
     commitClip(nextClip);
@@ -1823,19 +1966,39 @@ export function App() {
       lengthBars: normalizedLengthBars,
     });
 
-    if (
-      outOfRangeInstances.length > 0 &&
-      !window.confirm(
-        `Shorten arrangement to ${normalizedLengthBars} bar${
+    if (outOfRangeInstances.length > 0) {
+      setPendingConfirmation({
+        confirmLabel: "Shorten Arrangement",
+        detail: `${outOfRangeInstances.length} clip placement${
+          outOfRangeInstances.length === 1 ? "" : "s"
+        } will be removed`,
+        kind: "arrangement-length-trim",
+        lengthBars: normalizedLengthBars,
+        message: `Shorten arrangement to ${normalizedLengthBars} bar${
           normalizedLengthBars === 1 ? "" : "s"
         }? ${outOfRangeInstances.length} clip placement${
           outOfRangeInstances.length === 1 ? "" : "s"
         } beyond the new end will be removed.`,
-      )
-    ) {
+        title: "Shorten Arrangement",
+      });
       return;
     }
 
+    applyArrangementLengthChange(normalizedLengthBars);
+  }
+
+  function applyArrangementLengthChange(nextLengthBars: number) {
+    const normalizedLengthBars = normalizeArrangementLengthBars(nextLengthBars);
+
+    if (normalizedLengthBars === arrangementLengthBarsRef.current) {
+      return;
+    }
+
+    const currentClipInstances = clipInstancesRef.current;
+    const outOfRangeInstances = getClipInstancesOutsideArrangementLength({
+      instances: currentClipInstances,
+      lengthBars: normalizedLengthBars,
+    });
     const nextClipInstances =
       outOfRangeInstances.length > 0
         ? removeClipInstancesOutsideArrangementLength({
@@ -2336,6 +2499,61 @@ export function App() {
           )}
         </main>
       </div>
+
+      {pendingConfirmation ? (
+        <div
+          className={styles.dialogOverlay}
+          onMouseDown={cancelConfirmation}
+          role="presentation"
+        >
+          <div
+            aria-labelledby="destructive-confirmation-dialog-title"
+            aria-modal="true"
+            className={styles.dialogCard}
+            onKeyDown={handleConfirmationDialogKeyDown}
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className={styles.dialogHeader}>
+              <h2
+                className={styles.dialogTitle}
+                id="destructive-confirmation-dialog-title"
+              >
+                {pendingConfirmation.title}
+              </h2>
+              <button
+                aria-label="Close confirmation dialog"
+                className={styles.dialogCloseButton}
+                onClick={cancelConfirmation}
+                type="button"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+
+            <p className={styles.dialogBody}>{pendingConfirmation.message}</p>
+            <p className={styles.dialogMeta}>{pendingConfirmation.detail}</p>
+
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.dialogSecondaryButton}
+                onClick={cancelConfirmation}
+                ref={confirmationCancelButtonRef}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.dialogDangerButton}
+                onClick={confirmPendingAction}
+                type="button"
+              >
+                {pendingConfirmation.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

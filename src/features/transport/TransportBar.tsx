@@ -1,8 +1,20 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { Icon } from "../../components";
 import { MAX_TEMPO_BPM, MIN_TEMPO_BPM } from "../../utils";
 import styles from "./TransportBar.module.css";
+import {
+  createSuggestedProjectName,
+  trimProjectName,
+  validateProjectName,
+} from "./project-dialogs";
 
 export type TransportState = "paused" | "playing" | "stopped";
 export type TransportMode = "pattern" | "song";
@@ -26,12 +38,14 @@ interface TransportBarProps {
   transportState: TransportState;
   onBpmChange: (bpm: number) => void;
   onModeChange: (mode: TransportMode) => void;
-  onProjectCreate: () => void;
+  onProjectCreate: (projectName: string) => void;
   onProjectDelete: () => void;
-  onProjectRename: () => void;
+  onProjectRename: (projectName: string) => void;
   onProjectSelect: (projectId: string) => void;
   onTransportStateChange: (state: TransportState) => void;
 }
+
+type ProjectDialogMode = "create" | "delete" | "rename";
 
 export function TransportBar({
   activeProjectId,
@@ -53,13 +67,94 @@ export function TransportBar({
   onTransportStateChange,
 }: TransportBarProps) {
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [projectDialogMode, setProjectDialogMode] =
+    useState<ProjectDialogMode | null>(null);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const projectDeleteCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const projectNameInputRef = useRef<HTMLInputElement>(null);
+  const existingProjectNames = useMemo(
+    () => projects.map((project) => project.name),
+    [projects],
+  );
+  const suggestedProjectName = useMemo(
+    () => createSuggestedProjectName(existingProjectNames),
+    [existingProjectNames],
+  );
   const isPlaying = transportState === "playing";
+  const isNameDialog =
+    projectDialogMode === "create" || projectDialogMode === "rename";
+  const projectNameValidationError = isNameDialog
+    ? validateProjectName({
+        currentProjectName:
+          projectDialogMode === "rename" ? projectName : undefined,
+        existingProjectNames,
+        name: projectNameDraft,
+      })
+    : null;
   const statusText =
     transportState === "playing"
       ? "Playing"
       : transportState === "paused"
         ? "Paused"
         : "Stopped";
+
+  useEffect(() => {
+    if (isNameDialog) {
+      projectNameInputRef.current?.focus();
+      projectNameInputRef.current?.select();
+      return;
+    }
+
+    if (projectDialogMode === "delete") {
+      projectDeleteCancelButtonRef.current?.focus();
+    }
+  }, [isNameDialog, projectDialogMode]);
+
+  function openProjectDialog(mode: ProjectDialogMode) {
+    setIsProjectMenuOpen(false);
+    setProjectDialogMode(mode);
+    setProjectNameDraft(mode === "create" ? suggestedProjectName : projectName);
+  }
+
+  function closeProjectDialog() {
+    setProjectDialogMode(null);
+    setProjectNameDraft("");
+  }
+
+  function handleProjectDialogKeyDown(event: KeyboardEvent) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    event.stopPropagation();
+    closeProjectDialog();
+  }
+
+  function handleProjectNameSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!isNameDialog || projectNameValidationError) {
+      return;
+    }
+
+    const nextProjectName = trimProjectName(projectNameDraft);
+
+    closeProjectDialog();
+
+    if (projectDialogMode === "create") {
+      onProjectCreate(nextProjectName);
+      return;
+    }
+
+    if (nextProjectName !== trimProjectName(projectName)) {
+      onProjectRename(nextProjectName);
+    }
+  }
+
+  function handleProjectDeleteConfirm() {
+    closeProjectDialog();
+    onProjectDelete();
+  }
 
   return (
     <header className={styles.transportBar}>
@@ -190,8 +285,7 @@ export function TransportBar({
                   className={styles.projectMenuAction}
                   disabled={isProjectOperationPending}
                   onClick={() => {
-                    setIsProjectMenuOpen(false);
-                    onProjectCreate();
+                    openProjectDialog("create");
                   }}
                   role="menuitem"
                   type="button"
@@ -203,8 +297,7 @@ export function TransportBar({
                   className={styles.projectMenuAction}
                   disabled={isProjectOperationPending || !activeProjectId}
                   onClick={() => {
-                    setIsProjectMenuOpen(false);
-                    onProjectRename();
+                    openProjectDialog("rename");
                   }}
                   role="menuitem"
                   type="button"
@@ -216,8 +309,7 @@ export function TransportBar({
                   className={`${styles.projectMenuAction} ${styles.projectMenuDangerAction}`}
                   disabled={isProjectOperationPending || !activeProjectId}
                   onClick={() => {
-                    setIsProjectMenuOpen(false);
-                    onProjectDelete();
+                    openProjectDialog("delete");
                   }}
                   role="menuitem"
                   type="button"
@@ -230,6 +322,136 @@ export function TransportBar({
           ) : null}
         </div>
       </div>
+
+      {projectDialogMode ? (
+        <div
+          className={styles.dialogOverlay}
+          onMouseDown={closeProjectDialog}
+          role="presentation"
+        >
+          {isNameDialog ? (
+            <form
+              aria-labelledby="project-dialog-title"
+              aria-modal="true"
+              className={styles.dialogCard}
+              onKeyDown={handleProjectDialogKeyDown}
+              onMouseDown={(event) => event.stopPropagation()}
+              onSubmit={handleProjectNameSubmit}
+              role="dialog"
+            >
+              <div className={styles.dialogHeader}>
+                <h2 className={styles.dialogTitle} id="project-dialog-title">
+                  {projectDialogMode === "create"
+                    ? "New Project"
+                    : "Rename Project"}
+                </h2>
+                <button
+                  aria-label="Close project dialog"
+                  className={styles.dialogIconButton}
+                  onClick={closeProjectDialog}
+                  type="button"
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
+
+              <label className={styles.dialogLabel} htmlFor="project-name-input">
+                Project name
+              </label>
+              <input
+                aria-describedby={
+                  projectNameValidationError
+                    ? "project-name-error"
+                    : "project-name-help"
+                }
+                aria-invalid={projectNameValidationError ? "true" : undefined}
+                className={styles.dialogInput}
+                disabled={isProjectOperationPending}
+                id="project-name-input"
+                onChange={(event) => setProjectNameDraft(event.target.value)}
+                ref={projectNameInputRef}
+                type="text"
+                value={projectNameDraft}
+              />
+              {projectNameValidationError ? (
+                <p className={styles.dialogError} id="project-name-error">
+                  {projectNameValidationError}
+                </p>
+              ) : (
+                <p className={styles.dialogHelp} id="project-name-help">
+                  Project names are trimmed and must be unique.
+                </p>
+              )}
+
+              <div className={styles.dialogActions}>
+                <button
+                  className={styles.dialogSecondaryButton}
+                  onClick={closeProjectDialog}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.dialogPrimaryButton}
+                  disabled={
+                    isProjectOperationPending || Boolean(projectNameValidationError)
+                  }
+                  type="submit"
+                >
+                  {projectDialogMode === "create" ? "Create" : "Rename"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div
+              aria-labelledby="project-dialog-title"
+              aria-modal="true"
+              className={styles.dialogCard}
+              onKeyDown={handleProjectDialogKeyDown}
+              onMouseDown={(event) => event.stopPropagation()}
+              role="dialog"
+            >
+              <div className={styles.dialogHeader}>
+                <h2 className={styles.dialogTitle} id="project-dialog-title">
+                  Delete Project
+                </h2>
+                <button
+                  aria-label="Close project dialog"
+                  className={styles.dialogIconButton}
+                  onClick={closeProjectDialog}
+                  type="button"
+                >
+                  <Icon name="close" />
+                </button>
+              </div>
+
+              <p className={styles.dialogBody}>
+                Delete <strong>{projectName || "Untitled Project"}</strong>? This
+                removes the browser-local project and its imported sample data.
+              </p>
+
+              <div className={styles.dialogActions}>
+                <button
+                  className={styles.dialogSecondaryButton}
+                  onClick={closeProjectDialog}
+                  ref={projectDeleteCancelButtonRef}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.dialogDangerButton}
+                  disabled={isProjectOperationPending}
+                  onClick={handleProjectDeleteConfirm}
+                  type="button"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </header>
   );
 }
