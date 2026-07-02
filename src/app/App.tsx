@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   BUNDLED_DRUM_SAMPLES,
@@ -98,6 +98,12 @@ const DEFAULT_PROJECT_NAME = "Project 1";
 const AUTOSAVE_DEBOUNCE_MS = 600;
 
 type PersistenceStatus = "error" | "loading" | "saved" | "saving";
+
+interface PendingClipDelete {
+  clipId: string;
+  clipName: string;
+  message: string;
+}
 
 function drumEventsToSampleLoopEvents(
   drumEvents: readonly DrumEvent[],
@@ -260,6 +266,9 @@ export function App() {
   const [selectedClipInstanceId, setSelectedClipInstanceId] = useState<
     string | null
   >(null);
+  const [pendingClipDelete, setPendingClipDelete] =
+    useState<PendingClipDelete | null>(null);
+  const clipDeleteCancelButtonRef = useRef<HTMLButtonElement>(null);
   const [sampleMetas, setSampleMetas] = useState<SampleMeta[]>([]);
   const sampleMetasRef = useRef<SampleMeta[]>(sampleMetas);
   const [isClipImporting, setIsClipImporting] = useState(false);
@@ -563,6 +572,14 @@ export function App() {
       window.cancelAnimationFrame(animationFrameId);
     };
   }, [arrangementTracks, transportMode, transportState]);
+
+  useEffect(() => {
+    if (!pendingClipDelete) {
+      return;
+    }
+
+    clipDeleteCancelButtonRef.current?.focus();
+  }, [pendingClipDelete]);
 
   function commitSelectedClip(
     nextClip: HybridClip,
@@ -1563,7 +1580,53 @@ export function App() {
       clip,
     });
 
-    if (confirmationMessage && !window.confirm(confirmationMessage)) {
+    if (confirmationMessage) {
+      setPendingClipDelete({
+        clipId,
+        clipName: clip.name,
+        message: confirmationMessage,
+      });
+      return;
+    }
+
+    deleteClipById(clipId);
+  }
+
+  function cancelClipDelete() {
+    setPendingClipDelete(null);
+  }
+
+  function confirmClipDelete() {
+    const clipId = pendingClipDelete?.clipId;
+
+    if (!clipId) {
+      return;
+    }
+
+    setPendingClipDelete(null);
+    deleteClipById(clipId);
+  }
+
+  function handleClipDeleteDialogKeyDown(event: KeyboardEvent) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    event.stopPropagation();
+    cancelClipDelete();
+  }
+
+  function deleteClipById(clipId: string) {
+    const currentClips = clipsRef.current;
+
+    if (currentClips.length <= 1) {
+      return;
+    }
+
+    const clipIndex = currentClips.findIndex((clip) => clip.id === clipId);
+    const clip = currentClips[clipIndex];
+
+    if (!clip) {
       return;
     }
 
@@ -2301,6 +2364,57 @@ export function App() {
           )}
         </main>
       </div>
+
+      {pendingClipDelete ? (
+        <div
+          className={styles.dialogOverlay}
+          onMouseDown={cancelClipDelete}
+          role="presentation"
+        >
+          <div
+            aria-labelledby="clip-delete-dialog-title"
+            aria-modal="true"
+            className={styles.dialogCard}
+            onKeyDown={handleClipDeleteDialogKeyDown}
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className={styles.dialogHeader}>
+              <h2 className={styles.dialogTitle} id="clip-delete-dialog-title">
+                Delete Clip
+              </h2>
+              <button
+                className={styles.dialogCloseButton}
+                onClick={cancelClipDelete}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            <p className={styles.dialogBody}>{pendingClipDelete.message}</p>
+            <p className={styles.dialogMeta}>{pendingClipDelete.clipName}</p>
+
+            <div className={styles.dialogActions}>
+              <button
+                className={styles.dialogSecondaryButton}
+                onClick={cancelClipDelete}
+                ref={clipDeleteCancelButtonRef}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.dialogDangerButton}
+                onClick={confirmClipDelete}
+                type="button"
+              >
+                Delete Clip
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

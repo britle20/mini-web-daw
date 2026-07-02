@@ -125,6 +125,121 @@
   overflow: hidden;
 }
 
+.dialogOverlay {
+  align-items: center;
+  background: color-mix(in srgb, var(--color-surface-container-lowest) 72%, transparent);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: var(--space-section);
+  position: fixed;
+  z-index: var(--z-index-popover);
+}
+
+.dialogCard {
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: var(--panel-inset-shadow), 0 18px 48px rgb(0 0 0 / 48%);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-gutter);
+  max-width: 100%;
+  padding: var(--space-panel);
+  width: 360px;
+}
+
+.dialogHeader {
+  align-items: center;
+  display: flex;
+  gap: var(--space-gutter);
+  justify-content: space-between;
+}
+
+.dialogTitle {
+  color: var(--color-primary-strong);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-title);
+  line-height: var(--line-height-tight);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.dialogCloseButton {
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  min-height: 28px;
+  padding: 0 var(--space-gutter);
+  text-transform: uppercase;
+}
+
+.dialogCloseButton:hover,
+.dialogCloseButton:focus-visible {
+  border-color: var(--color-outline);
+  color: var(--color-primary-strong);
+}
+
+.dialogBody,
+.dialogMeta {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-body);
+  margin: 0;
+}
+
+.dialogBody {
+  color: var(--color-text-muted);
+}
+
+.dialogMeta {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-dim);
+  padding: var(--space-gutter);
+}
+
+.dialogActions {
+  display: flex;
+  gap: var(--space-gutter);
+  justify-content: flex-end;
+  padding-top: var(--space-gutter);
+}
+
+.dialogSecondaryButton,
+.dialogDangerButton {
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  min-height: 32px;
+  padding: 0 var(--space-panel);
+}
+
+.dialogSecondaryButton {
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  color: var(--color-text-muted);
+}
+
+.dialogDangerButton {
+  background: transparent;
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}
+
+.dialogSecondaryButton:hover,
+.dialogDangerButton:hover,
+.dialogSecondaryButton:focus-visible,
+.dialogDangerButton:focus-visible {
+  filter: brightness(1.08);
+}
+
 @media (max-width: 920px) {
   .mainLayout {
     grid-template-columns: minmax(212px, 32%) minmax(0, 1fr);
