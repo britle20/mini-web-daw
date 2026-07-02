@@ -63,7 +63,7 @@ export function ProjectSidebar({
   const [addingInstrumentClipId, setAddingInstrumentClipId] =
     useState<string | null>(null);
   const [isClipAddMenuOpen, setIsClipAddMenuOpen] = useState(false);
-  const [collapsedClipIds, setCollapsedClipIds] = useState<ReadonlySet<string>>(
+  const [expandedClipIds, setExpandedClipIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [renamingClipId, setRenamingClipId] = useState<string | null>(null);
@@ -147,10 +147,10 @@ export function ProjectSidebar({
 
   function toggleInstrumentPicker(clipId: string) {
     setRenamingClipId(null);
-    setCollapsedClipIds((currentClipIds) => {
+    setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
 
-      nextClipIds.delete(clipId);
+      nextClipIds.add(clipId);
       return nextClipIds;
     });
     setAddingInstrumentClipId((currentClipId) =>
@@ -160,7 +160,7 @@ export function ProjectSidebar({
 
   function toggleClipExpanded(clipId: string) {
     setAddingInstrumentClipId(null);
-    setCollapsedClipIds((currentClipIds) => {
+    setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
 
       if (nextClipIds.has(clipId)) {
@@ -239,7 +239,7 @@ export function ProjectSidebar({
           const isClipSelected = clip.id === selectedClipId;
           const isHybrid = isHybridClip(clip);
           const isAudio = isAudioClip(clip);
-          const isClipExpanded = !collapsedClipIds.has(clip.id);
+          const isClipExpanded = expandedClipIds.has(clip.id);
           const availableInstruments = isHybrid
             ? PITCHED_INSTRUMENTS.filter(
                 (instrument) => !clip.pitchedInstrumentIds.includes(instrument.id),

@@ -4,20 +4,19 @@
 
 Create a browser-first, clip-oriented mini DAW that is useful for making electronic music. The app should favor correct timing, serializable project data, and focused workflows over broad full-DAW scope.
 
-## Current Milestone: Basic Mixer Effects
+## Current Milestone: Sidebar Clip List UX
 
-The current next feature is the first real track-level effects pass for the `SONG` arrangement mixer.
+The current next task is a focused sidebar UX cleanup before returning to larger feature work.
 
 Focus:
 
-- Replace the mixer `FX: None` placeholder with one functional insert effect slot per track.
-- Start with a small Web Audio-native effect set: Filter, Delay, and Distortion.
-- Keep effect settings serializable and runtime Web Audio nodes out of project JSON.
-- Keep live `SONG` playback and arrangement WAV export behavior aligned where practical.
+- Keep clip lists scannable as projects gain more clips and instruments.
+- Collapse clip instrument lists by default while preserving manual expand/collapse behavior.
+- Avoid changing project data shape for UI-only state.
 
 ## Active Issue Order
 
-1. #1 Basic mixer effects -> `docs/features/23-basic-mixer-effects.md`
+1. #9 Collapse clip instrument lists by default -> focused UX issue
 2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
 3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
 4. #5 Project JSON and bundle export/import -> `docs/features/26-project-json-and-bundle-export-import.md`
@@ -50,6 +49,7 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 20. Adjustable arrangement length.
 21. Arrangement WAV export.
 22. Multi-project management.
+23. Basic mixer effects.
 
 ## Planned Milestones
 
