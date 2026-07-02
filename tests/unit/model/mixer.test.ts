@@ -98,6 +98,38 @@ describe("mixer model", () => {
     ).toEqual({ volumeDb: MIXER_MIN_VOLUME_DB });
   });
 
+  it("preserves track effect state when updating mixer controls", () => {
+    const effectSlot = createTrackEffectState("delay");
+    const initialStates = [
+      {
+        ...createDefaultTrackMixerState("track-1"),
+        effectSlot,
+      },
+    ];
+    const mutedStates = updateTrackMixerState(initialStates, "track-1", {
+      muted: true,
+    });
+    const soloedStates = updateTrackMixerState(mutedStates, "track-1", {
+      solo: true,
+    });
+    const volumeStates = updateTrackMixerState(soloedStates, "track-1", {
+      volumeDb: -6,
+    });
+
+    expect(mutedStates[0]).toMatchObject({
+      effectSlot,
+      muted: true,
+    });
+    expect(soloedStates[0]).toMatchObject({
+      effectSlot,
+      solo: true,
+    });
+    expect(volumeStates[0]).toMatchObject({
+      effectSlot,
+      volumeDb: -6,
+    });
+  });
+
   it("uses deterministic mute and solo audibility rules", () => {
     const trackOne = {
       ...createDefaultTrackMixerState("track-1"),

@@ -105,13 +105,24 @@ export function updateTrackMixerState(
   trackId: TrackId,
   patch: Partial<Omit<TrackMixerState, "trackId">>,
 ): TrackMixerState[] {
-  const normalizedPatch = {
-    ...patch,
-    effectSlot:
-      patch.effectSlot === undefined
-        ? undefined
-        : normalizeTrackEffectState(patch.effectSlot),
-  };
+  const normalizedPatch: Partial<Omit<TrackMixerState, "trackId">> = {};
+
+  if (patch.effectSlot !== undefined) {
+    normalizedPatch.effectSlot = normalizeTrackEffectState(patch.effectSlot);
+  }
+
+  if (patch.muted !== undefined) {
+    normalizedPatch.muted = patch.muted;
+  }
+
+  if (patch.solo !== undefined) {
+    normalizedPatch.solo = patch.solo;
+  }
+
+  if (patch.volumeDb !== undefined) {
+    normalizedPatch.volumeDb = clampMixerVolumeDb(patch.volumeDb);
+  }
+
   const hasExistingState = states.some((state) => state.trackId === trackId);
   const nextStates = hasExistingState
     ? states
@@ -126,10 +137,6 @@ export function updateTrackMixerState(
       ...state,
       ...normalizedPatch,
       trackId,
-      volumeDb:
-        normalizedPatch.volumeDb === undefined
-          ? state.volumeDb
-          : clampMixerVolumeDb(normalizedPatch.volumeDb),
     });
   });
 }
