@@ -20,12 +20,22 @@ import styles from "./ProjectSidebar.module.css";
 
 export type InstrumentId = "audio" | "drums" | PitchedInstrumentId;
 
+export interface MissingImportedSampleItem {
+  fileName?: string;
+  name: string;
+  sampleId: string;
+}
+
 interface ProjectSidebarProps {
   arrangementExportError?: string | null;
   clips: readonly Clip[];
   clipImportError?: string | null;
   isArrangementExporting?: boolean;
   isClipImporting?: boolean;
+  isProjectFileProcessing?: boolean;
+  missingImportedSamples?: readonly MissingImportedSampleItem[];
+  projectFileError?: string | null;
+  projectFileNotice?: string | null;
   projectName: string;
   selectedClipId: string;
   selectedInstrumentId: InstrumentId;
@@ -36,9 +46,13 @@ interface ProjectSidebarProps {
   onClipImport: (file: File) => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
+  onImportedSampleRelink: (sampleId: string, file: File) => void;
   onInstrumentAdd: (clipId: string, instrumentId: PitchedInstrumentId) => void;
   onInstrumentRemove: (clipId: string, instrumentId: PitchedInstrumentId) => void;
   onInstrumentSelect: (clipId: string, instrumentId: InstrumentId) => void;
+  onProjectBundleExport: () => void;
+  onProjectFileImport: (file: File) => void;
+  onProjectJsonExport: () => void;
 }
 
 export function ProjectSidebar({
@@ -47,6 +61,10 @@ export function ProjectSidebar({
   clipImportError = null,
   isArrangementExporting = false,
   isClipImporting = false,
+  isProjectFileProcessing = false,
+  missingImportedSamples = [],
+  projectFileError = null,
+  projectFileNotice = null,
   projectName,
   selectedClipId,
   selectedInstrumentId,
@@ -57,11 +75,18 @@ export function ProjectSidebar({
   onClipImport,
   onClipRename,
   onClipSelect,
+  onImportedSampleRelink,
   onInstrumentAdd,
   onInstrumentRemove,
   onInstrumentSelect,
+  onProjectBundleExport,
+  onProjectFileImport,
+  onProjectJsonExport,
 }: ProjectSidebarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const clipFileInputRef = useRef<HTMLInputElement>(null);
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
+  const relinkFileInputRef = useRef<HTMLInputElement>(null);
+  const relinkingSampleIdRef = useRef<string | null>(null);
   const [addingInstrumentClipId, setAddingInstrumentClipId] =
     useState<string | null>(null);
   const [isClipAddMenuOpen, setIsClipAddMenuOpen] = useState(false);
@@ -83,7 +108,7 @@ export function ProjectSidebar({
   function handleImportFileClick() {
     setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
-    fileInputRef.current?.click();
+    clipFileInputRef.current?.click();
   }
 
   function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -96,6 +121,41 @@ export function ProjectSidebar({
     }
 
     onClipImport(file);
+  }
+
+  function handleProjectFileImportClick() {
+    projectFileInputRef.current?.click();
+  }
+
+  function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    onProjectFileImport(file);
+  }
+
+  function handleRelinkClick(sampleId: string) {
+    relinkingSampleIdRef.current = sampleId;
+    relinkFileInputRef.current?.click();
+  }
+
+  function handleRelinkFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const sampleId = relinkingSampleIdRef.current;
+
+    event.target.value = "";
+    relinkingSampleIdRef.current = null;
+
+    if (!file || !sampleId) {
+      return;
+    }
+
+    onImportedSampleRelink(sampleId, file);
   }
 
   function beginClipRename(clip: Clip) {
@@ -252,7 +312,7 @@ export function ProjectSidebar({
               </div>
             ) : null}
             <input
-              ref={fileInputRef}
+              ref={clipFileInputRef}
               accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
               className={styles.hiddenFileInput}
               onChange={handleImportFileChange}
@@ -481,19 +541,95 @@ export function ProjectSidebar({
       </nav>
 
       <div className={styles.sidebarFooter}>
+        <div className={styles.footerSection}>
+          <p className={styles.footerSectionLabel}>Project files</p>
+          <button
+            className={styles.footerButton}
+            disabled={isProjectFileProcessing}
+            onClick={onProjectJsonExport}
+            type="button"
+          >
+            <Icon name="description" />
+            <span>Export Project JSON</span>
+          </button>
+          <button
+            className={styles.footerButton}
+            disabled={isProjectFileProcessing}
+            onClick={onProjectBundleExport}
+            type="button"
+          >
+            <Icon name="folder_zip" />
+            <span>Export Project Bundle</span>
+          </button>
+          <button
+            className={styles.footerButton}
+            disabled={isProjectFileProcessing}
+            onClick={handleProjectFileImportClick}
+            type="button"
+          >
+            <Icon name="upload_file" />
+            <span>
+              {isProjectFileProcessing ? "Processing..." : "Import Project File"}
+            </span>
+          </button>
+          <input
+            ref={projectFileInputRef}
+            accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
+            className={styles.hiddenFileInput}
+            onChange={handleProjectFileChange}
+            type="file"
+          />
+          <input
+            ref={relinkFileInputRef}
+            accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
+            className={styles.hiddenFileInput}
+            onChange={handleRelinkFileChange}
+            type="file"
+          />
+          {projectFileNotice ? (
+            <p className={styles.fileNotice}>{projectFileNotice}</p>
+          ) : null}
+          {projectFileError ? (
+            <p className={styles.exportError}>{projectFileError}</p>
+          ) : null}
+          {missingImportedSamples.length > 0 ? (
+            <div className={styles.missingSamples}>
+              <p className={styles.missingSamplesTitle}>Missing samples</p>
+              {missingImportedSamples.map((sample) => (
+                <div className={styles.missingSampleItem} key={sample.sampleId}>
+                  <span title={sample.fileName ?? sample.name}>{sample.name}</span>
+                  <button
+                    className={styles.relinkButton}
+                    disabled={isProjectFileProcessing}
+                    onClick={() => handleRelinkClick(sample.sampleId)}
+                    type="button"
+                  >
+                    Relink
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        <div className={styles.footerSection}>
+          <p className={styles.footerSectionLabel}>Output</p>
+          <button
+            aria-busy={isArrangementExporting}
+            className={styles.footerButton}
+            disabled={isArrangementExporting}
+            onClick={onArrangementExport}
+            type="button"
+          >
+            <Icon name="ios_share" />
+            <span>
+              {isArrangementExporting ? "Exporting..." : "Export Arrangement WAV"}
+            </span>
+          </button>
+        </div>
         <button className={styles.footerButton} type="button">
           <Icon name="settings" />
           <span>Settings</span>
-        </button>
-        <button
-          aria-busy={isArrangementExporting}
-          className={styles.footerButton}
-          disabled={isArrangementExporting}
-          onClick={onArrangementExport}
-          type="button"
-        >
-          <Icon name="ios_share" />
-          <span>{isArrangementExporting ? "Exporting..." : "Export"}</span>
         </button>
         {arrangementExportError ? (
           <p className={styles.exportError}>{arrangementExportError}</p>

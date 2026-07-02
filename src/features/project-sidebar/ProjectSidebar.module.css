@@ -354,8 +354,22 @@
 .sidebarFooter {
   border-top: 1px solid var(--color-outline-variant);
   display: grid;
-  gap: var(--space-unit);
+  gap: var(--space-gutter);
   padding: var(--space-panel);
+}
+
+.footerSection {
+  display: grid;
+  gap: var(--space-unit);
+}
+
+.footerSectionLabel {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--letter-spacing-label);
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .footerButton:disabled {
@@ -369,6 +383,15 @@
   color: var(--color-text-dim);
 }
 
+.fileNotice {
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  margin: var(--space-unit) 0 0;
+  padding: var(--space-gutter);
+}
+
 .exportError {
   border: 1px solid var(--color-status-error);
   border-radius: var(--radius-sm);
@@ -376,4 +399,61 @@
   font-size: var(--font-size-caption);
   margin: var(--space-unit) 0 0;
   padding: var(--space-gutter);
+}
+
+.missingSamples {
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-unit);
+  margin-top: var(--space-unit);
+  padding: var(--space-gutter);
+}
+
+.missingSamplesTitle {
+  color: var(--color-error);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  margin: 0;
+}
+
+.missingSampleItem {
+  align-items: center;
+  display: flex;
+  gap: var(--space-gutter);
+  min-width: 0;
+}
+
+.missingSampleItem span {
+  color: var(--color-text-muted);
+  flex: 1;
+  font-size: var(--font-size-caption);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relinkButton {
+  background: var(--color-surface-container-high);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-strong);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: var(--font-size-caption);
+  min-height: 26px;
+  padding: 0 var(--space-gutter);
+}
+
+.relinkButton:hover,
+.relinkButton:focus-visible {
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.relinkButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
 }

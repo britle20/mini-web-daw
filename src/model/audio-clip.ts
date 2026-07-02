@@ -5,6 +5,8 @@ export interface SampleMeta {
   name: string;
   durationSeconds?: number;
   source: {
+    byteLength?: number;
+    contentHashSha256?: string;
     kind: "bundled" | "imported";
     fileName?: string;
     mimeType?: string;
@@ -132,13 +134,17 @@ export function createImportedAudioIds({
 }
 
 export function createImportedAudioClipDraft({
+  byteLength,
   clipId,
+  contentHashSha256,
   durationSeconds,
   fileName,
   mimeType,
   sampleId,
 }: {
+  byteLength?: number;
   clipId: string;
+  contentHashSha256?: string;
   durationSeconds: number;
   fileName: string;
   mimeType: string;
@@ -146,6 +152,19 @@ export function createImportedAudioClipDraft({
 }): ImportedAudioClipDraft {
   const name = createImportedAudioDisplayName(fileName);
   const normalizedMimeType = mimeType || "audio/wav";
+  const source: SampleMeta["source"] = {
+    fileName,
+    kind: "imported",
+    mimeType: normalizedMimeType,
+  };
+
+  if (typeof byteLength === "number") {
+    source.byteLength = byteLength;
+  }
+
+  if (contentHashSha256) {
+    source.contentHashSha256 = contentHashSha256;
+  }
 
   return {
     clip: {
@@ -161,11 +180,7 @@ export function createImportedAudioClipDraft({
       durationSeconds,
       id: sampleId,
       name,
-      source: {
-        fileName,
-        kind: "imported",
-        mimeType: normalizedMimeType,
-      },
+      source,
     },
   };
 }

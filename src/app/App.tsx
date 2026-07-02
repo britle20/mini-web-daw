@@ -83,10 +83,21 @@ import {
   type TrackEffectState,
 } from "../model";
 import {
+  assertImportedSampleRelinkMatches,
+  createImportedProjectDocument,
+  createImportedSampleFileIdentity,
   createIndexedDbProjectStore,
+  createProjectBundleBlob,
+  createProjectBundleFileName,
   createProjectId,
+  createProjectJsonBlob,
+  createProjectJsonFileName,
   createPersistedProjectDocument,
+  getImportedSampleMetas,
   getImportedSampleIds,
+  parseProjectBundleBlob,
+  parseProjectJsonBlob,
+  updateImportedSampleMetaIdentity,
   type PersistedProjectDocument,
   type ProjectSummary,
 } from "../persistence";
@@ -227,6 +238,15 @@ function createArrangementExportFileName(projectName: string): string {
   return `${safeProjectName}-arrangement-${timestamp}.wav`;
 }
 
+function isProjectBundleFile(file: File): boolean {
+  const hasZipExtension = /\.zip$/iu.test(file.name);
+  const hasZipMimeType =
+    file.type === "application/zip" ||
+    file.type === "application/x-zip-compressed";
+
+  return hasZipExtension || hasZipMimeType;
+}
+
 function createRuntimeImportedSampleKey(projectId: string, sampleId: string): string {
   return `${projectId}::${sampleId}`;
 }
@@ -309,6 +329,12 @@ export function App() {
   const [arrangementExportError, setArrangementExportError] = useState<
     string | null
   >(null);
+  const [isProjectFileProcessing, setIsProjectFileProcessing] = useState(false);
+  const [projectFileError, setProjectFileError] = useState<string | null>(null);
+  const [projectFileNotice, setProjectFileNotice] = useState<string | null>(null);
+  const [missingImportedSampleIds, setMissingImportedSampleIds] = useState<
+    string[]
+  >([]);
   const [isPersistenceReady, setIsPersistenceReady] = useState(false);
   const [persistenceStatus, setPersistenceStatus] =
     useState<PersistenceStatus>("loading");
@@ -339,6 +365,14 @@ export function App() {
   const selectedSampleMeta = selectedAudioClip
     ? sampleMetas.find((sampleMeta) => sampleMeta.id === selectedAudioClip.sampleId)
     : undefined;
+  const missingImportedSamples = missingImportedSampleIds
+    .map((sampleId) => sampleMetas.find((sampleMeta) => sampleMeta.id === sampleId))
+    .filter((sampleMeta): sampleMeta is SampleMeta => Boolean(sampleMeta))
+    .map((sampleMeta) => ({
+      fileName: sampleMeta.source.fileName,
+      name: sampleMeta.name,
+      sampleId: sampleMeta.id,
+    }));
   const [playheadTick, setPlayheadTick] = useState<Tick>(0);
   const playheadTickRef = useRef<Tick>(0);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -787,6 +821,8 @@ export function App() {
   }
 
   function reportMissingImportedSampleIds(missingSampleIds: readonly string[]) {
+    setMissingImportedSampleIds([...missingSampleIds]);
+
     if (missingSampleIds.length > 0) {
       const message = `Missing imported audio data for ${missingSampleIds.join(
         ", ",
@@ -890,6 +926,117 @@ export function App() {
     };
   }
 
+  async function loadImportedSampleBlobForProject({
+    projectId,
+    sampleId,
+  }: {
+    projectId: string;
+    sampleId: string;
+  }): Promise<Blob | null> {
+    const cachedBlob = importedSampleBlobsRef.current.get(sampleId);
+
+    if (cachedBlob) {
+      return cachedBlob;
+    }
+
+    const storedBlob = await projectStore.loadImportedSampleBlob(
+      projectId,
+      sampleId,
+    );
+
+    if (storedBlob) {
+      importedSampleBlobsRef.current.set(sampleId, storedBlob);
+    }
+
+    return storedBlob;
+  }
+
+  async function prepareProjectFileExport(): Promise<{
+    importedSampleBlobs: Map<string, Blob>;
+    missingSampleIds: string[];
+    project: PersistedProjectDocument;
+  }> {
+    const project = createCurrentProjectDocument({ savedAt: Date.now() });
+
+    if (!project) {
+      throw new Error("No active project is available for export.");
+    }
+
+    const importedSampleBlobs = new Map<string, Blob>();
+    const missingSampleIds: string[] = [];
+    let nextSampleMetas = project.sampleMetas;
+    let didUpdateSampleIdentity = false;
+
+    for (const sampleMeta of getImportedSampleMetas(project.sampleMetas)) {
+      const sampleBlob = await loadImportedSampleBlobForProject({
+        projectId: project.id,
+        sampleId: sampleMeta.id,
+      });
+
+      if (!sampleBlob) {
+        missingSampleIds.push(sampleMeta.id);
+        continue;
+      }
+
+      importedSampleBlobs.set(sampleMeta.id, sampleBlob);
+
+      const identity = await createImportedSampleFileIdentity({
+        fileName: sampleMeta.source.fileName,
+        mimeType: sampleMeta.source.mimeType || sampleBlob.type,
+        sampleBlob,
+      });
+
+      if (
+        sampleMeta.source.byteLength !== identity.byteLength ||
+        sampleMeta.source.contentHashSha256 !== identity.contentHashSha256
+      ) {
+        didUpdateSampleIdentity = true;
+        nextSampleMetas = nextSampleMetas.map((candidate) =>
+          candidate.id === sampleMeta.id
+            ? updateImportedSampleMetaIdentity({
+                identity,
+                sampleMeta: candidate,
+              })
+            : candidate,
+        );
+      }
+    }
+
+    if (!didUpdateSampleIdentity) {
+      return {
+        importedSampleBlobs,
+        missingSampleIds,
+        project,
+      };
+    }
+
+    const projectWithSampleIdentity = createPersistedProjectDocument({
+      arrangementLengthBars: project.arrangementLengthBars,
+      arrangementLoopRange: project.arrangementLoopRange,
+      arrangementTracks: project.arrangementTracks,
+      clipInstances: project.clipInstances,
+      clips: project.clips,
+      createdAt: project.createdAt,
+      id: project.id,
+      masterMixerState: project.masterMixerState,
+      name: project.name,
+      sampleMetas: nextSampleMetas,
+      savedAt: project.savedAt,
+      tempoBpm: project.tempoBpm,
+      trackMixerStates: project.trackMixerStates,
+    });
+
+    sampleMetasRef.current = projectWithSampleIdentity.sampleMetas;
+    setSampleMetas(projectWithSampleIdentity.sampleMetas);
+    await projectStore.saveProject(projectWithSampleIdentity);
+
+    return {
+      importedSampleBlobs,
+      missingSampleIds,
+      project: projectWithSampleIdentity,
+    };
+  }
+
   function applyProjectDocument({
     importedSampleBlobs,
     project,
@@ -958,6 +1105,7 @@ export function App() {
     setAudioError(null);
     setClipImportError(null);
     setArrangementExportError(null);
+    setProjectFileError(null);
     setIsAudioClipPreviewPlaying(false);
 
     if (isAudioClip(restoredClip)) {
@@ -1491,9 +1639,18 @@ export function App() {
     setIsClipImporting(true);
 
     try {
-      const audioBuffer = await audioEngine.importSampleFile(sampleId, file);
+      const [audioBuffer, sampleIdentity] = await Promise.all([
+        audioEngine.importSampleFile(sampleId, file),
+        createImportedSampleFileIdentity({
+          fileName: file.name,
+          mimeType: file.type,
+          sampleBlob: file,
+        }),
+      ]);
       const { clip, sampleMeta } = createImportedAudioClipDraft({
+        byteLength: sampleIdentity.byteLength,
         clipId,
+        contentHashSha256: sampleIdentity.contentHashSha256,
         durationSeconds: audioBuffer.duration,
         fileName: file.name,
         mimeType: file.type,
@@ -1569,6 +1726,222 @@ export function App() {
       setAudioError(message);
     } finally {
       setIsArrangementExporting(false);
+    }
+  }
+
+  async function handleProjectJsonExport() {
+    if (isProjectFileProcessing) {
+      return;
+    }
+
+    setProjectFileError(null);
+    setProjectFileNotice(null);
+    setIsProjectFileProcessing(true);
+
+    try {
+      const { missingSampleIds, project } = await prepareProjectFileExport();
+
+      downloadBlob(
+        createProjectJsonBlob(project),
+        createProjectJsonFileName(project.name),
+      );
+      setProjectFileNotice(
+        missingSampleIds.length > 0
+          ? "Project JSON exported. Missing imported WAVs must be relinked after import."
+          : "Project JSON exported.",
+      );
+    } catch (error) {
+      setProjectFileError(
+        error instanceof Error ? error.message : "Project JSON export failed.",
+      );
+    } finally {
+      setIsProjectFileProcessing(false);
+    }
+  }
+
+  async function handleProjectBundleExport() {
+    if (isProjectFileProcessing) {
+      return;
+    }
+
+    setProjectFileError(null);
+    setProjectFileNotice(null);
+    setIsProjectFileProcessing(true);
+
+    try {
+      const { importedSampleBlobs, missingSampleIds, project } =
+        await prepareProjectFileExport();
+      const bundleBlob = await createProjectBundleBlob({
+        importedSampleBlobs,
+        project,
+      });
+
+      downloadBlob(bundleBlob, createProjectBundleFileName(project.name));
+      setProjectFileNotice(
+        missingSampleIds.length > 0
+          ? "Project bundle exported with missing imported WAVs omitted."
+          : "Project bundle exported.",
+      );
+    } catch (error) {
+      setProjectFileError(
+        error instanceof Error ? error.message : "Project bundle export failed.",
+      );
+    } finally {
+      setIsProjectFileProcessing(false);
+    }
+  }
+
+  async function handleProjectFileImport(file: File) {
+    if (isProjectFileProcessing) {
+      return;
+    }
+
+    setProjectFileError(null);
+    setProjectFileNotice(null);
+    setIsProjectFileProcessing(true);
+
+    try {
+      await saveCurrentProjectNow();
+
+      const importedBundle = isProjectBundleFile(file)
+        ? await parseProjectBundleBlob(file)
+        : await parseProjectJsonBlob(file).then((project) => ({
+            missingSampleIds: getImportedSampleIds(project),
+            mismatchedSampleIds: [],
+            project,
+            sampleBlobs: new Map<string, Blob>(),
+          }));
+      const collection = await projectStore.loadProjectCollection();
+      const importedProject = createImportedProjectDocument({
+        existingProjects: collection.projects,
+        project: importedBundle.project,
+      });
+
+      await projectStore.saveProject(importedProject);
+
+      await Promise.all(
+        Array.from(importedBundle.sampleBlobs, ([sampleId, blob]) => {
+          const sampleMeta = importedProject.sampleMetas.find(
+            (candidate) => candidate.id === sampleId,
+          );
+
+          return projectStore.saveImportedSampleBlob({
+            blob,
+            fileName: sampleMeta?.source.fileName,
+            mimeType: sampleMeta?.source.mimeType || blob.type,
+            projectId: importedProject.id,
+            sampleId,
+          });
+        }),
+      );
+
+      await openProject(importedProject.id);
+
+      const missingCount =
+        importedBundle.missingSampleIds.length +
+        importedBundle.mismatchedSampleIds.length;
+      const warning =
+        missingCount > 0
+          ? ` ${missingCount} imported WAV ${missingCount === 1 ? "is" : "are"} missing or mismatched and need relinking.`
+          : "";
+
+      setProjectFileNotice(`Imported ${importedProject.name}.${warning}`);
+    } catch (error) {
+      setProjectFileError(
+        error instanceof Error ? error.message : "Project file import failed.",
+      );
+    } finally {
+      setIsProjectFileProcessing(false);
+    }
+  }
+
+  async function handleImportedSampleRelink(sampleId: string, file: File) {
+    if (isProjectFileProcessing) {
+      return;
+    }
+
+    setProjectFileError(null);
+    setProjectFileNotice(null);
+    setAudioError(null);
+    setIsProjectFileProcessing(true);
+
+    try {
+      validateImportedWavFile(file);
+
+      const sampleMeta = sampleMetasRef.current.find(
+        (candidate) => candidate.id === sampleId,
+      );
+
+      if (!sampleMeta) {
+        throw new Error("The selected sample reference no longer exists.");
+      }
+
+      const identity = await createImportedSampleFileIdentity({
+        fileName: file.name,
+        mimeType: file.type,
+        sampleBlob: file,
+      });
+
+      assertImportedSampleRelinkMatches({ identity, sampleMeta });
+
+      const audioBuffer = await audioEngine.importSampleFile(sampleId, file);
+      const projectId = activeProjectIdRef.current;
+
+      if (!projectId) {
+        throw new Error("No active project is available for relinking.");
+      }
+
+      await projectStore.saveImportedSampleBlob({
+        blob: file,
+        fileName: file.name,
+        mimeType: file.type,
+        projectId,
+        sampleId,
+      });
+
+      const nextSampleMetas = sampleMetasRef.current.map((candidate) =>
+        candidate.id === sampleId
+          ? updateImportedSampleMetaIdentity({
+              durationSeconds: audioBuffer.duration,
+              identity,
+              sampleMeta: candidate,
+            })
+          : candidate,
+      );
+      const nextClips = clipsRef.current.map((clip) =>
+        isAudioClip(clip) && clip.sampleId === sampleId
+          ? {
+              ...clip,
+              durationSeconds: audioBuffer.duration,
+              mimeType: file.type || clip.mimeType,
+              sourceFileName: file.name,
+            }
+          : clip,
+      );
+      const nextMissingSampleIds = missingImportedSampleIds.filter(
+        (candidate) => candidate !== sampleId,
+      );
+
+      importedSampleBlobsRef.current.set(sampleId, file);
+      runtimeImportedSampleKeysRef.current.add(
+        createRuntimeImportedSampleKey(projectId, sampleId),
+      );
+      sampleMetasRef.current = nextSampleMetas;
+      clipsRef.current = nextClips;
+      setSampleMetas(nextSampleMetas);
+      setClips(nextClips);
+      setMissingImportedSampleIds(nextMissingSampleIds);
+      reportMissingImportedSampleIds(nextMissingSampleIds);
+      await saveCurrentProjectNow();
+      setProjectFileNotice(`Relinked ${sampleMeta.name}.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Imported sample relink failed.";
+
+      setProjectFileError(message);
+      setAudioError(message);
+    } finally {
+      setIsProjectFileProcessing(false);
     }
   }
 
@@ -2380,6 +2753,8 @@ export function App() {
           clips={clips}
           isArrangementExporting={isArrangementExporting}
           isClipImporting={isClipImporting}
+          isProjectFileProcessing={isProjectFileProcessing}
+          missingImportedSamples={missingImportedSamples}
           onArrangementExport={handleArrangementWavExport}
           onClipAdd={handleClipAdd}
           onClipDelete={handleClipDelete}
@@ -2387,9 +2762,15 @@ export function App() {
           onClipImport={handleAudioClipImport}
           onClipRename={handleClipRename}
           onClipSelect={handleClipSelect}
+          onImportedSampleRelink={handleImportedSampleRelink}
           onInstrumentAdd={handleInstrumentAdd}
           onInstrumentRemove={handleInstrumentRemove}
           onInstrumentSelect={handleInstrumentSelect}
+          onProjectBundleExport={handleProjectBundleExport}
+          onProjectFileImport={handleProjectFileImport}
+          onProjectJsonExport={handleProjectJsonExport}
+          projectFileError={projectFileError}
+          projectFileNotice={projectFileNotice}
           projectName={projectName}
           selectedClipId={selectedClip.id}
           selectedInstrumentId={selectedInstrumentId}
