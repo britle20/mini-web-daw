@@ -99,11 +99,41 @@ const AUTOSAVE_DEBOUNCE_MS = 600;
 
 type PersistenceStatus = "error" | "loading" | "saved" | "saving";
 
-interface PendingClipDelete {
-  clipId: string;
-  clipName: string;
-  message: string;
-}
+type PendingConfirmation =
+  | {
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      kind: "clip-delete";
+      message: string;
+      title: string;
+    }
+  | {
+      barCount: HybridClipLengthBars;
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      kind: "clip-length-trim";
+      message: string;
+      title: string;
+    }
+  | {
+      clipId: string;
+      confirmLabel: string;
+      detail: string;
+      instrumentId: PitchedInstrumentId;
+      kind: "instrument-remove";
+      message: string;
+      title: string;
+    }
+  | {
+      confirmLabel: string;
+      detail: string;
+      kind: "arrangement-length-trim";
+      lengthBars: number;
+      message: string;
+      title: string;
+    };
 
 function drumEventsToSampleLoopEvents(
   drumEvents: readonly DrumEvent[],
@@ -266,9 +296,9 @@ export function App() {
   const [selectedClipInstanceId, setSelectedClipInstanceId] = useState<
     string | null
   >(null);
-  const [pendingClipDelete, setPendingClipDelete] =
-    useState<PendingClipDelete | null>(null);
-  const clipDeleteCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const [pendingConfirmation, setPendingConfirmation] =
+    useState<PendingConfirmation | null>(null);
+  const confirmationCancelButtonRef = useRef<HTMLButtonElement>(null);
   const [sampleMetas, setSampleMetas] = useState<SampleMeta[]>([]);
   const sampleMetasRef = useRef<SampleMeta[]>(sampleMetas);
   const [isClipImporting, setIsClipImporting] = useState(false);
@@ -574,12 +604,12 @@ export function App() {
   }, [arrangementTracks, transportMode, transportState]);
 
   useEffect(() => {
-    if (!pendingClipDelete) {
+    if (!pendingConfirmation) {
       return;
     }
 
-    clipDeleteCancelButtonRef.current?.focus();
-  }, [pendingClipDelete]);
+    confirmationCancelButtonRef.current?.focus();
+  }, [pendingConfirmation]);
 
   function commitSelectedClip(
     nextClip: HybridClip,
@@ -1252,22 +1282,50 @@ export function App() {
         lengthTicks,
       });
 
-    if (
-      shouldTrimEvents &&
-      !window.confirm(
-        `Shorten ${clip.name} to ${barCount} bar${
+    if (shouldTrimEvents) {
+      setPendingConfirmation({
+        barCount,
+        clipId: clip.id,
+        confirmLabel: "Shorten Clip",
+        detail: clip.name,
+        kind: "clip-length-trim",
+        message: `Shorten ${clip.name} to ${barCount} bar${
           barCount === 1 ? "" : "s"
         }? Events outside the new length will be removed or trimmed.`,
-      )
-    ) {
+        title: "Shorten Clip",
+      });
       return;
     }
+
+    applyClipLengthChange({
+      barCount,
+      clipId: clip.id,
+      trimEvents: false,
+    });
+  }
+
+  function applyClipLengthChange({
+    barCount,
+    clipId,
+    trimEvents,
+  }: {
+    barCount: HybridClipLengthBars;
+    clipId: string;
+    trimEvents: boolean;
+  }) {
+    const clip = clipsRef.current.find((candidate) => candidate.id === clipId);
+
+    if (!clip || !isHybridClip(clip)) {
+      return;
+    }
+
+    const lengthTicks = getHybridClipLengthTicks(barCount);
 
     try {
       const nextClip = updateHybridClipLength({
         clip,
         lengthTicks,
-        trimEvents: shouldTrimEvents,
+        trimEvents,
       });
 
       commitSelectedClip(nextClip, {
@@ -1581,10 +1639,13 @@ export function App() {
     });
 
     if (confirmationMessage) {
-      setPendingClipDelete({
+      setPendingConfirmation({
         clipId,
-        clipName: clip.name,
+        confirmLabel: "Delete Clip",
+        detail: clip.name,
+        kind: "clip-delete",
         message: confirmationMessage,
+        title: "Delete Clip",
       });
       return;
     }
@@ -1592,28 +1653,52 @@ export function App() {
     deleteClipById(clipId);
   }
 
-  function cancelClipDelete() {
-    setPendingClipDelete(null);
+  function cancelConfirmation() {
+    setPendingConfirmation(null);
   }
 
-  function confirmClipDelete() {
-    const clipId = pendingClipDelete?.clipId;
+  function confirmPendingAction() {
+    const confirmation = pendingConfirmation;
 
-    if (!clipId) {
+    if (!confirmation) {
       return;
     }
 
-    setPendingClipDelete(null);
-    deleteClipById(clipId);
+    setPendingConfirmation(null);
+
+    if (confirmation.kind === "clip-delete") {
+      deleteClipById(confirmation.clipId);
+      return;
+    }
+
+    if (confirmation.kind === "clip-length-trim") {
+      applyClipLengthChange({
+        barCount: confirmation.barCount,
+        clipId: confirmation.clipId,
+        trimEvents: true,
+      });
+      return;
+    }
+
+    if (confirmation.kind === "instrument-remove") {
+      removeInstrumentFromClip({
+        clipId: confirmation.clipId,
+        instrumentId: confirmation.instrumentId,
+        removeOwnedNotes: true,
+      });
+      return;
+    }
+
+    applyArrangementLengthChange(confirmation.lengthBars);
   }
 
-  function handleClipDeleteDialogKeyDown(event: KeyboardEvent) {
+  function handleConfirmationDialogKeyDown(event: KeyboardEvent) {
     if (event.key !== "Escape") {
       return;
     }
 
     event.stopPropagation();
-    cancelClipDelete();
+    cancelConfirmation();
   }
 
   function deleteClipById(clipId: string) {
@@ -1738,19 +1823,48 @@ export function App() {
       instrumentId,
     });
 
-    if (
-      hasOwnedNotes &&
-      !window.confirm(
-        "Remove this instrument and delete its piano roll notes from the clip?",
-      )
-    ) {
+    if (hasOwnedNotes) {
+      const instrumentName = getPitchedInstrument(instrumentId)?.name ?? instrumentId;
+
+      setPendingConfirmation({
+        clipId,
+        confirmLabel: "Remove Instrument",
+        detail: `${clip.name} / ${instrumentName}`,
+        instrumentId,
+        kind: "instrument-remove",
+        message:
+          "Remove this instrument and delete its piano roll notes from the clip?",
+        title: "Remove Instrument",
+      });
+      return;
+    }
+
+    removeInstrumentFromClip({
+      clipId,
+      instrumentId,
+      removeOwnedNotes: false,
+    });
+  }
+
+  function removeInstrumentFromClip({
+    clipId,
+    instrumentId,
+    removeOwnedNotes,
+  }: {
+    clipId: string;
+    instrumentId: PitchedInstrumentId;
+    removeOwnedNotes: boolean;
+  }) {
+    const clip = clipsRef.current.find((candidate) => candidate.id === clipId);
+
+    if (!clip || !isHybridClip(clip)) {
       return;
     }
 
     const nextClip = removePitchedInstrumentFromClip({
       clip,
       instrumentId,
-      removeOwnedNotes: hasOwnedNotes,
+      removeOwnedNotes,
     });
 
     commitClip(nextClip);
@@ -1851,19 +1965,39 @@ export function App() {
       lengthBars: normalizedLengthBars,
     });
 
-    if (
-      outOfRangeInstances.length > 0 &&
-      !window.confirm(
-        `Shorten arrangement to ${normalizedLengthBars} bar${
+    if (outOfRangeInstances.length > 0) {
+      setPendingConfirmation({
+        confirmLabel: "Shorten Arrangement",
+        detail: `${outOfRangeInstances.length} clip placement${
+          outOfRangeInstances.length === 1 ? "" : "s"
+        } will be removed`,
+        kind: "arrangement-length-trim",
+        lengthBars: normalizedLengthBars,
+        message: `Shorten arrangement to ${normalizedLengthBars} bar${
           normalizedLengthBars === 1 ? "" : "s"
         }? ${outOfRangeInstances.length} clip placement${
           outOfRangeInstances.length === 1 ? "" : "s"
         } beyond the new end will be removed.`,
-      )
-    ) {
+        title: "Shorten Arrangement",
+      });
       return;
     }
 
+    applyArrangementLengthChange(normalizedLengthBars);
+  }
+
+  function applyArrangementLengthChange(nextLengthBars: number) {
+    const normalizedLengthBars = normalizeArrangementLengthBars(nextLengthBars);
+
+    if (normalizedLengthBars === arrangementLengthBarsRef.current) {
+      return;
+    }
+
+    const currentClipInstances = clipInstancesRef.current;
+    const outOfRangeInstances = getClipInstancesOutsideArrangementLength({
+      instances: currentClipInstances,
+      lengthBars: normalizedLengthBars,
+    });
     const nextClipInstances =
       outOfRangeInstances.length > 0
         ? removeClipInstancesOutsideArrangementLength({
@@ -2365,51 +2499,54 @@ export function App() {
         </main>
       </div>
 
-      {pendingClipDelete ? (
+      {pendingConfirmation ? (
         <div
           className={styles.dialogOverlay}
-          onMouseDown={cancelClipDelete}
+          onMouseDown={cancelConfirmation}
           role="presentation"
         >
           <div
-            aria-labelledby="clip-delete-dialog-title"
+            aria-labelledby="destructive-confirmation-dialog-title"
             aria-modal="true"
             className={styles.dialogCard}
-            onKeyDown={handleClipDeleteDialogKeyDown}
+            onKeyDown={handleConfirmationDialogKeyDown}
             onMouseDown={(event) => event.stopPropagation()}
             role="dialog"
           >
             <div className={styles.dialogHeader}>
-              <h2 className={styles.dialogTitle} id="clip-delete-dialog-title">
-                Delete Clip
+              <h2
+                className={styles.dialogTitle}
+                id="destructive-confirmation-dialog-title"
+              >
+                {pendingConfirmation.title}
               </h2>
               <button
                 className={styles.dialogCloseButton}
-                onClick={cancelClipDelete}
+                onClick={cancelConfirmation}
                 type="button"
               >
                 Close
               </button>
             </div>
 
-            <p className={styles.dialogBody}>{pendingClipDelete.message}</p>
-            <p className={styles.dialogMeta}>{pendingClipDelete.clipName}</p>
+            <p className={styles.dialogBody}>{pendingConfirmation.message}</p>
+            <p className={styles.dialogMeta}>{pendingConfirmation.detail}</p>
 
             <div className={styles.dialogActions}>
               <button
                 className={styles.dialogSecondaryButton}
-                onClick={cancelClipDelete}
-                ref={clipDeleteCancelButtonRef}
+                onClick={cancelConfirmation}
+                ref={confirmationCancelButtonRef}
                 type="button"
               >
                 Cancel
               </button>
               <button
                 className={styles.dialogDangerButton}
-                onClick={confirmClipDelete}
+                onClick={confirmPendingAction}
                 type="button"
               >
-                Delete Clip
+                {pendingConfirmation.confirmLabel}
               </button>
             </div>
           </div>
