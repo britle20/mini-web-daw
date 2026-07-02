@@ -435,8 +435,8 @@ function FilterEffectControls({
           }
           value={parameters.type}
         >
-          <option value="lowpass">Low</option>
-          <option value="highpass">High</option>
+          <option value="lowpass">Low-Pass</option>
+          <option value="highpass">High-Pass</option>
         </select>
       </label>
       <EffectRange
@@ -491,7 +491,7 @@ function DelayEffectControls({
         valueLabel={`${parameters.delayTimeSeconds.toFixed(2)}s`}
       />
       <EffectRange
-        label="Fbk"
+        label="Feedback"
         max={DELAY_MAX_FEEDBACK}
         min={DELAY_MIN_FEEDBACK}
         onChange={(feedback) =>
@@ -509,7 +509,7 @@ function DelayEffectControls({
         valueLabel={`${Math.round(parameters.feedback * 100)}%`}
       />
       <EffectRange
-        label="Mix"
+        label="Wet"
         max={EFFECT_MAX_WET_MIX}
         min={EFFECT_MIN_WET_MIX}
         onChange={(wetMix) =>
@@ -560,7 +560,7 @@ function DistortionEffectControls({
         valueLabel={parameters.drive.toFixed(1)}
       />
       <EffectRange
-        label="Mix"
+        label="Wet"
         max={EFFECT_MAX_WET_MIX}
         min={EFFECT_MIN_WET_MIX}
         onChange={(wetMix) =>
