@@ -247,6 +247,10 @@
   color: var(--color-error);
 }
 
+.hiddenFileInput {
+  display: none;
+}
+
 .projectMenuItem:disabled,
 .projectMenuAction:disabled {
   cursor: not-allowed;

@@ -2741,12 +2741,14 @@ export function App() {
       <TransportBar
         activeProjectId={activeProjectId}
         bpm={bpm}
+        isProjectFileProcessing={isProjectFileProcessing}
         isProjectOperationPending={isProjectOperationPending}
         mode={transportMode}
         onBpmChange={commitBpm}
         onModeChange={handleTransportModeChange}
         onProjectCreate={handleProjectCreate}
         onProjectDelete={handleProjectDelete}
+        onProjectFileImport={handleProjectFileImport}
         onProjectRename={handleProjectRename}
         onProjectSelect={handleProjectSelect}
         onTransportStateChange={handleTransportStateChange}
@@ -2781,7 +2783,6 @@ export function App() {
           onInstrumentRemove={handleInstrumentRemove}
           onInstrumentSelect={handleInstrumentSelect}
           onProjectBundleExport={handleProjectBundleExport}
-          onProjectFileImport={handleProjectFileImport}
           onProjectFileErrorDismiss={() => setProjectFileError(null)}
           onProjectJsonExport={handleProjectJsonExport}
           projectFileError={projectFileError}

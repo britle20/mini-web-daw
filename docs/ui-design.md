@@ -382,7 +382,7 @@ The sidebar should keep footer actions compact. Use one `Export` button that ope
 - `Export Project Bundle` exports an app-owned ZIP with `project.json` and available imported WAV blobs.
 - `Export Arrangement WAV` renders the final arrangement audio.
 
-Keep `Import Project File` as a separate footer action. It accepts app JSON or app-created ZIP bundles and creates a new local project.
+Place `Import Project File` in the project menu near `New Project`. It accepts app JSON or app-created ZIP bundles and creates a new local project.
 
 - Missing imported samples should appear as a compact list with one `Relink` action per sample.
 - Successful export, import, and relink actions may use short auto-dismissing toast feedback.

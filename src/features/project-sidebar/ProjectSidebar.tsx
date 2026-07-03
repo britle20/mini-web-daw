@@ -52,7 +52,6 @@ interface ProjectSidebarProps {
   onInstrumentRemove: (clipId: string, instrumentId: PitchedInstrumentId) => void;
   onInstrumentSelect: (clipId: string, instrumentId: InstrumentId) => void;
   onProjectBundleExport: () => void;
-  onProjectFileImport: (file: File) => void;
   onProjectFileErrorDismiss: () => void;
   onProjectJsonExport: () => void;
 }
@@ -83,12 +82,10 @@ export function ProjectSidebar({
   onInstrumentRemove,
   onInstrumentSelect,
   onProjectBundleExport,
-  onProjectFileImport,
   onProjectFileErrorDismiss,
   onProjectJsonExport,
 }: ProjectSidebarProps) {
   const clipFileInputRef = useRef<HTMLInputElement>(null);
-  const projectFileInputRef = useRef<HTMLInputElement>(null);
   const relinkFileInputRef = useRef<HTMLInputElement>(null);
   const relinkingSampleIdRef = useRef<string | null>(null);
   const [addingInstrumentClipId, setAddingInstrumentClipId] =
@@ -130,11 +127,6 @@ export function ProjectSidebar({
     onClipImport(file);
   }
 
-  function handleProjectFileImportClick() {
-    setIsExportMenuOpen(false);
-    projectFileInputRef.current?.click();
-  }
-
   function handleProjectJsonExportClick() {
     setIsExportMenuOpen(false);
     onProjectJsonExport();
@@ -148,18 +140,6 @@ export function ProjectSidebar({
   function handleArrangementExportClick() {
     setIsExportMenuOpen(false);
     onArrangementExport();
-  }
-
-  function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    event.target.value = "";
-
-    if (!file) {
-      return;
-    }
-
-    onProjectFileImport(file);
   }
 
   function handleRelinkClick(sampleId: string) {
@@ -624,24 +604,6 @@ export function ProjectSidebar({
           ) : null}
         </div>
 
-        <button
-          className={styles.footerButton}
-          disabled={isProjectFileProcessing}
-          onClick={handleProjectFileImportClick}
-          type="button"
-        >
-          <Icon name="upload_file" />
-          <span>
-            {isProjectFileProcessing ? "Processing..." : "Import Project File"}
-          </span>
-        </button>
-        <input
-          ref={projectFileInputRef}
-          accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
-          className={styles.hiddenFileInput}
-          onChange={handleProjectFileChange}
-          type="file"
-        />
         <input
           ref={relinkFileInputRef}
           accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
