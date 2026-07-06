@@ -374,9 +374,21 @@ The first audio clip selected view may be a simple placeholder or detail panel:
 - Import status or limitation if the file is session-only.
 - Optional preview/play control if supported by the current audio engine.
 
-Use clear copy for limitations. If imported files are not persisted yet, the UI should not imply that they survive refresh or project export.
+Use clear copy for file boundaries. Imported WAV bytes are browser-local source media stored outside project JSON. JSON-only project imports may need relinking, while project bundles include available source WAV files.
 
-When IndexedDB persistence is available, imported audio clip details may indicate that the clip is stored locally. The top transport/status area should show minimal project save status such as loading, saving, saved, or save failed.
+The sidebar should keep footer actions compact. Use one `Export` button that opens a small menu:
+
+- `Export Project JSON` exports serializable project data and sample metadata only.
+- `Export Project Bundle` exports an app-owned ZIP with `project.json` and available imported WAV blobs.
+- `Export Arrangement WAV` renders the final arrangement audio.
+
+Place `Import Project File` in the project menu near `New Project`. It accepts app JSON or app-created ZIP bundles and creates a new local project.
+
+- Missing imported samples should appear as a compact list with one `Relink` action per sample.
+- Successful export, import, and relink actions may use short auto-dismissing toast feedback.
+- Failed export, import, and relink actions should stay visible as inline errors until the user dismisses them or retries.
+
+The top transport/status area should show minimal project save status such as loading, saving, saved, or save failed.
 
 Future arrangement duration resizing should happen in the arrangement view, not during import. The UI should treat that as non-destructive trimming or clip-instance length editing unless a later time-stretching feature explicitly adds stretch behavior.
 

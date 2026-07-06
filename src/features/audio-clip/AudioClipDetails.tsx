@@ -61,14 +61,17 @@ export function AudioClipDetails({
           <dt>Sample ID</dt>
           <dd>{clip.sampleId}</dd>
         </div>
+        <div className={styles.detailItem}>
+          <dt>Source size</dt>
+          <dd>{formatByteLength(sampleMeta?.source.byteLength)}</dd>
+        </div>
       </dl>
 
       <div className={styles.notice}>
-        <strong>Session-only import</strong>
+        <strong>Browser-local source</strong>
         <span>
-          The decoded audio is available in the runtime cache for this browser
-          session. Refreshing the page will lose the imported file until IndexedDB
-          persistence is implemented.
+          Imported WAV bytes are stored outside project JSON. JSON-only imports may
+          need relinking; project bundles include available source WAV files.
         </span>
       </div>
 
@@ -90,4 +93,20 @@ function formatDuration(durationSeconds: number): string {
   }
 
   return `${seconds.toFixed(2)} sec`;
+}
+
+function formatByteLength(byteLength: number | undefined): string {
+  if (typeof byteLength !== "number" || byteLength < 0) {
+    return "Unknown";
+  }
+
+  if (byteLength < 1024) {
+    return `${byteLength} B`;
+  }
+
+  if (byteLength < 1024 * 1024) {
+    return `${(byteLength / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(byteLength / 1024 / 1024).toFixed(2)} MB`;
 }

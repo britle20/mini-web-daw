@@ -102,7 +102,7 @@ IndexedDB may store imported sample blobs or bytes outside the project JSON docu
 
 Portable project JSON exports should include imported sample `sampleId` values and metadata such as source file name, MIME type, duration, byte length, and `contentHashSha256` when available. They should not include imported WAV bytes. JSON-only imports may therefore restore imported clips as missing-source clips until the user relinks matching WAV files.
 
-Project bundle exports may include imported WAV blobs in an app-owned ZIP layout next to `project.json`. Bundle import should restore blobs into project-scoped persistence and verify their hashes when metadata is available.
+Project bundle exports may include imported WAV blobs in an app-owned store-only ZIP layout next to `project.json`. Bundle import should restore blobs into project-scoped persistence and verify their hashes when metadata is available. The first bundle importer only needs to support bundles created by this app, not arbitrary third-party ZIP layouts.
 
 Each persisted project has a stable project ID. Imported sample blobs are scoped
 to the owning project with project-aware records and composite blob keys.

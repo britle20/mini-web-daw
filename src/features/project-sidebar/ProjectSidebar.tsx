@@ -20,25 +20,40 @@ import styles from "./ProjectSidebar.module.css";
 
 export type InstrumentId = "audio" | "drums" | PitchedInstrumentId;
 
+export interface MissingImportedSampleItem {
+  fileName?: string;
+  name: string;
+  sampleId: string;
+}
+
 interface ProjectSidebarProps {
   arrangementExportError?: string | null;
   clips: readonly Clip[];
   clipImportError?: string | null;
   isArrangementExporting?: boolean;
   isClipImporting?: boolean;
+  isProjectFileProcessing?: boolean;
+  missingImportedSamples?: readonly MissingImportedSampleItem[];
+  projectFileError?: string | null;
   projectName: string;
   selectedClipId: string;
   selectedInstrumentId: InstrumentId;
   onArrangementExport: () => void;
+  onArrangementExportErrorDismiss: () => void;
   onClipAdd: () => void;
   onClipDelete: (clipId: string) => void;
   onClipDuplicate: (clipId: string) => void;
   onClipImport: (file: File) => void;
+  onClipImportErrorDismiss: () => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
+  onImportedSampleRelink: (sampleId: string, file: File) => void;
   onInstrumentAdd: (clipId: string, instrumentId: PitchedInstrumentId) => void;
   onInstrumentRemove: (clipId: string, instrumentId: PitchedInstrumentId) => void;
   onInstrumentSelect: (clipId: string, instrumentId: InstrumentId) => void;
+  onProjectBundleExport: () => void;
+  onProjectFileErrorDismiss: () => void;
+  onProjectJsonExport: () => void;
 }
 
 export function ProjectSidebar({
@@ -47,24 +62,36 @@ export function ProjectSidebar({
   clipImportError = null,
   isArrangementExporting = false,
   isClipImporting = false,
+  isProjectFileProcessing = false,
+  missingImportedSamples = [],
+  projectFileError = null,
   projectName,
   selectedClipId,
   selectedInstrumentId,
   onArrangementExport,
+  onArrangementExportErrorDismiss,
   onClipAdd,
   onClipDelete,
   onClipDuplicate,
   onClipImport,
+  onClipImportErrorDismiss,
   onClipRename,
   onClipSelect,
+  onImportedSampleRelink,
   onInstrumentAdd,
   onInstrumentRemove,
   onInstrumentSelect,
+  onProjectBundleExport,
+  onProjectFileErrorDismiss,
+  onProjectJsonExport,
 }: ProjectSidebarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const clipFileInputRef = useRef<HTMLInputElement>(null);
+  const relinkFileInputRef = useRef<HTMLInputElement>(null);
+  const relinkingSampleIdRef = useRef<string | null>(null);
   const [addingInstrumentClipId, setAddingInstrumentClipId] =
     useState<string | null>(null);
   const [isClipAddMenuOpen, setIsClipAddMenuOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [expandedClipIds, setExpandedClipIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -77,13 +104,15 @@ export function ProjectSidebar({
   function handleBuildClipClick() {
     setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
+    setIsExportMenuOpen(false);
     onClipAdd();
   }
 
   function handleImportFileClick() {
     setOpenClipActionMenuId(null);
     setIsClipAddMenuOpen(false);
-    fileInputRef.current?.click();
+    setIsExportMenuOpen(false);
+    clipFileInputRef.current?.click();
   }
 
   function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -96,6 +125,40 @@ export function ProjectSidebar({
     }
 
     onClipImport(file);
+  }
+
+  function handleProjectJsonExportClick() {
+    setIsExportMenuOpen(false);
+    onProjectJsonExport();
+  }
+
+  function handleProjectBundleExportClick() {
+    setIsExportMenuOpen(false);
+    onProjectBundleExport();
+  }
+
+  function handleArrangementExportClick() {
+    setIsExportMenuOpen(false);
+    onArrangementExport();
+  }
+
+  function handleRelinkClick(sampleId: string) {
+    relinkingSampleIdRef.current = sampleId;
+    relinkFileInputRef.current?.click();
+  }
+
+  function handleRelinkFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const sampleId = relinkingSampleIdRef.current;
+
+    event.target.value = "";
+    relinkingSampleIdRef.current = null;
+
+    if (!file || !sampleId) {
+      return;
+    }
+
+    onImportedSampleRelink(sampleId, file);
   }
 
   function beginClipRename(clip: Clip) {
@@ -154,6 +217,7 @@ export function ProjectSidebar({
 
   function toggleInstrumentPicker(clipId: string) {
     setOpenClipActionMenuId(null);
+    setIsExportMenuOpen(false);
     setRenamingClipId(null);
     setExpandedClipIds((currentClipIds) => {
       const nextClipIds = new Set(currentClipIds);
@@ -184,6 +248,7 @@ export function ProjectSidebar({
 
   function toggleClipActionMenu(clipId: string) {
     setAddingInstrumentClipId(null);
+    setIsExportMenuOpen(false);
     setOpenClipActionMenuId((currentClipId) =>
       currentClipId === clipId ? null : clipId,
     );
@@ -225,6 +290,7 @@ export function ProjectSidebar({
               disabled={isClipImporting}
               onClick={() => {
                 setOpenClipActionMenuId(null);
+                setIsExportMenuOpen(false);
                 setIsClipAddMenuOpen((isOpen) => !isOpen);
               }}
               type="button"
@@ -252,7 +318,7 @@ export function ProjectSidebar({
               </div>
             ) : null}
             <input
-              ref={fileInputRef}
+              ref={clipFileInputRef}
               accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
               className={styles.hiddenFileInput}
               onChange={handleImportFileChange}
@@ -261,7 +327,10 @@ export function ProjectSidebar({
           </div>
         </div>
         {clipImportError ? (
-          <p className={styles.importError}>{clipImportError}</p>
+          <DismissibleError
+            message={clipImportError}
+            onDismiss={onClipImportErrorDismiss}
+          />
         ) : null}
 
         {clips.map((clip) => {
@@ -481,24 +550,125 @@ export function ProjectSidebar({
       </nav>
 
       <div className={styles.sidebarFooter}>
+        <div className={styles.footerActionControl}>
+          <button
+            aria-expanded={isExportMenuOpen}
+            aria-haspopup="menu"
+            aria-label="Open export options"
+            className={styles.footerButton}
+            disabled={isProjectFileProcessing || isArrangementExporting}
+            onClick={() => {
+              setIsClipAddMenuOpen(false);
+              setOpenClipActionMenuId(null);
+              setIsExportMenuOpen((isOpen) => !isOpen);
+            }}
+            type="button"
+          >
+            <Icon name="ios_share" />
+            <span>
+              {isProjectFileProcessing || isArrangementExporting
+                ? "Exporting..."
+                : "Export"}
+            </span>
+          </button>
+          {isExportMenuOpen ? (
+            <div className={styles.exportMenu} role="menu">
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleProjectJsonExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="description" />
+                <span>Export Project JSON</span>
+              </button>
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleProjectBundleExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="folder_zip" />
+                <span>Export Project Bundle</span>
+              </button>
+              <div className={styles.exportMenuDivider} role="separator" />
+              <button
+                className={styles.exportMenuItem}
+                onClick={handleArrangementExportClick}
+                role="menuitem"
+                type="button"
+              >
+                <Icon name="graphic_eq" />
+                <span>Export Arrangement WAV</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <input
+          ref={relinkFileInputRef}
+          accept=".wav,audio/wav,audio/wave,audio/x-wav,audio/vnd.wave"
+          className={styles.hiddenFileInput}
+          onChange={handleRelinkFileChange}
+          type="file"
+        />
         <button className={styles.footerButton} type="button">
           <Icon name="settings" />
           <span>Settings</span>
         </button>
-        <button
-          aria-busy={isArrangementExporting}
-          className={styles.footerButton}
-          disabled={isArrangementExporting}
-          onClick={onArrangementExport}
-          type="button"
-        >
-          <Icon name="ios_share" />
-          <span>{isArrangementExporting ? "Exporting..." : "Export"}</span>
-        </button>
+        {projectFileError ? (
+          <DismissibleError
+            message={projectFileError}
+            onDismiss={onProjectFileErrorDismiss}
+          />
+        ) : null}
         {arrangementExportError ? (
-          <p className={styles.exportError}>{arrangementExportError}</p>
+          <DismissibleError
+            message={arrangementExportError}
+            onDismiss={onArrangementExportErrorDismiss}
+          />
+        ) : null}
+        {missingImportedSamples.length > 0 ? (
+          <div className={styles.missingSamples}>
+            <p className={styles.missingSamplesTitle}>Missing samples</p>
+            {missingImportedSamples.map((sample) => (
+              <div className={styles.missingSampleItem} key={sample.sampleId}>
+                <span title={sample.fileName ?? sample.name}>{sample.name}</span>
+                <button
+                  className={styles.relinkButton}
+                  disabled={isProjectFileProcessing}
+                  onClick={() => handleRelinkClick(sample.sampleId)}
+                  type="button"
+                >
+                  Relink
+                </button>
+              </div>
+            ))}
+          </div>
         ) : null}
       </div>
     </aside>
+  );
+}
+
+function DismissibleError({
+  message,
+  onDismiss,
+}: {
+  message: string;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className={styles.dismissibleError} role="alert">
+      <span>{message}</span>
+      <button
+        aria-label="Dismiss error"
+        className={styles.dismissErrorButton}
+        onClick={onDismiss}
+        type="button"
+      >
+        <Icon name="close" />
+      </button>
+    </div>
   );
 }

@@ -215,7 +215,7 @@ The model should keep these concepts separate:
 - Runtime media data: `File`, `Blob`, object URL, decoded `AudioBuffer`, and active source nodes.
 - Future arrangement placement: where a clip instance appears in song time and how long that instance lasts.
 
-Imported file bytes and decoded sample data are not project JSON. IndexedDB persistence may store imported blobs outside the project document and connect them back through stable sample IDs. Until that persistence feature exists, imported audio clips may be session-only and should be documented in the UI.
+Imported file bytes and decoded sample data are not project JSON. IndexedDB persistence stores imported blobs outside the project document and connects them back through stable sample IDs. If a JSON-only project import does not include the source WAV bytes, imported audio clips should show a missing-source state until the user relinks matching WAV files.
 
 The IndexedDB persistence implementation stores each project document separately
 from imported sample blobs. The project document may include clips, arrangement

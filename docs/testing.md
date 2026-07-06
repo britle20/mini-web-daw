@@ -27,7 +27,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
 - Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
 - Project autosave/manual restore checks should verify that imported audio metadata and blobs remain separated.
-- Project JSON and bundle import/export helpers: unit tests for serialization, project ID collision handling, sample hash metadata, missing sample detection, and app-created bundle layout where practical.
+- Project JSON and bundle import/export helpers: unit tests for serialization, project ID collision handling, sample hash metadata, missing sample detection, store-only ZIP round trips, and app-created bundle layout where practical.
 - Imported sample relink helpers: unit tests for SHA-256 matching, mismatch rejection, and fallback metadata behavior when hashes are unavailable.
 - Imported audio source BPM validation and stretch-rate helpers: unit tests.
 - BPM-aware imported audio scheduler planning: unit tests where practical.

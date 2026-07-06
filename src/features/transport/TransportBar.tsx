@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
 } from "react";
@@ -28,6 +29,7 @@ interface ProjectMenuProject {
 interface TransportBarProps {
   activeProjectId: string;
   bpm: number;
+  isProjectFileProcessing?: boolean;
   isProjectOperationPending?: boolean;
   mode: TransportMode;
   persistenceStatusLabel?: string;
@@ -40,6 +42,7 @@ interface TransportBarProps {
   onModeChange: (mode: TransportMode) => void;
   onProjectCreate: (projectName: string) => void;
   onProjectDelete: () => void;
+  onProjectFileImport: (file: File) => void;
   onProjectRename: (projectName: string) => void;
   onProjectSelect: (projectId: string) => void;
   onTransportStateChange: (state: TransportState) => void;
@@ -50,6 +53,7 @@ type ProjectDialogMode = "create" | "delete" | "rename";
 export function TransportBar({
   activeProjectId,
   bpm,
+  isProjectFileProcessing = false,
   isProjectOperationPending = false,
   mode,
   persistenceStatusLabel = "Saved",
@@ -62,6 +66,7 @@ export function TransportBar({
   onModeChange,
   onProjectCreate,
   onProjectDelete,
+  onProjectFileImport,
   onProjectRename,
   onProjectSelect,
   onTransportStateChange,
@@ -71,6 +76,7 @@ export function TransportBar({
     useState<ProjectDialogMode | null>(null);
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const projectDeleteCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const projectFileInputRef = useRef<HTMLInputElement>(null);
   const projectNameInputRef = useRef<HTMLInputElement>(null);
   const existingProjectNames = useMemo(
     () => projects.map((project) => project.name),
@@ -154,6 +160,23 @@ export function TransportBar({
   function handleProjectDeleteConfirm() {
     closeProjectDialog();
     onProjectDelete();
+  }
+
+  function handleProjectFileImportClick() {
+    setIsProjectMenuOpen(false);
+    projectFileInputRef.current?.click();
+  }
+
+  function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    onProjectFileImport(file);
   }
 
   return (
@@ -295,6 +318,16 @@ export function TransportBar({
                 </button>
                 <button
                   className={styles.projectMenuAction}
+                  disabled={isProjectFileProcessing || isProjectOperationPending}
+                  onClick={handleProjectFileImportClick}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Icon name="upload_file" />
+                  <span>Import Project File</span>
+                </button>
+                <button
+                  className={styles.projectMenuAction}
                   disabled={isProjectOperationPending || !activeProjectId}
                   onClick={() => {
                     openProjectDialog("rename");
@@ -320,6 +353,13 @@ export function TransportBar({
               </div>
             </div>
           ) : null}
+          <input
+            ref={projectFileInputRef}
+            accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
+            className={styles.hiddenFileInput}
+            onChange={handleProjectFileChange}
+            type="file"
+          />
         </div>
       </div>
 
