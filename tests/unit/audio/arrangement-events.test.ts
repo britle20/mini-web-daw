@@ -66,12 +66,13 @@ describe("arrangement playback event expansion", () => {
   });
 
   it("schedules imported audio clips at their arrangement start tick", () => {
-    const { clip } = createImportedAudioClipDraft({
+    const { clip, sampleMeta } = createImportedAudioClipDraft({
       clipId: "audio-clip-loop",
       durationSeconds: 2,
       fileName: "Loop.wav",
       mimeType: "audio/wav",
       sampleId: "imported-audio-loop",
+      sourceBpm: 96,
     });
     const instance: ClipInstance = {
       clipId: clip.id,
@@ -86,14 +87,19 @@ describe("arrangement playback event expansion", () => {
       expandClipInstancesForPlayback({
         clipInstances: [instance],
         clips: [clip],
+        projectBpm: 120,
+        sampleMetas: [sampleMeta],
       }).sampleEvents,
     ).toEqual([
       {
         durationTicks: 1920,
         id: "audio-instance-1:audio",
+        playbackDurationSeconds: 2,
         sampleId: "imported-audio-loop",
         sourceOffsetSeconds: 0.25,
+        sourceBpm: 96,
         startTick: 960,
+        stretchRate: 1.25,
         trackId: "track-2",
       },
     ]);

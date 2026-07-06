@@ -68,12 +68,18 @@ export {
   updateHybridClipLength,
 } from "./drum-clip";
 export {
+  DEFAULT_IMPORTED_AUDIO_SOURCE_BPM,
+  MAX_IMPORTED_AUDIO_SOURCE_BPM,
+  MIN_IMPORTED_AUDIO_SOURCE_BPM,
   createImportedAudioClipDraft,
   createImportedAudioDisplayName,
   createImportedAudioIds,
   getClipDeleteConfirmationMessage,
+  getImportedAudioStretchRate,
   isAudioClip,
   isHybridClip,
+  isValidImportedAudioSourceBpm,
+  validateImportedAudioSourceBpm,
   validateImportedWavFile,
 } from "./audio-clip";
 export {

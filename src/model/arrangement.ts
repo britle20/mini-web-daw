@@ -4,7 +4,12 @@ import {
   TICKS_PER_BEAT,
   secondsToTicks,
 } from "../utils";
-import { isAudioClip, isHybridClip, type Clip } from "./audio-clip";
+import {
+  isAudioClip,
+  isHybridClip,
+  isValidImportedAudioSourceBpm,
+  type Clip,
+} from "./audio-clip";
 
 export type TrackId = string;
 export type ClipInstanceId = string;
@@ -82,18 +87,24 @@ export function createDefaultArrangementLoopRange(
 export function createClipInstance({
   clip,
   existingInstanceIds,
+  sourceBpm,
   startTick,
   tempoBpm,
   trackId,
 }: {
   clip: Clip;
   existingInstanceIds: readonly ClipInstanceId[];
+  sourceBpm?: number;
   startTick: Tick;
   tempoBpm: number;
   trackId: TrackId;
 }): ClipInstance {
   const snappedStartTick = snapArrangementTick(startTick);
-  const lengthTicks = getDefaultClipInstanceLength({ clip, tempoBpm });
+  const lengthTicks = getDefaultClipInstanceLength({
+    clip,
+    sourceBpm,
+    tempoBpm,
+  });
 
   return {
     clipId: clip.id,
@@ -233,9 +244,11 @@ export function removeClipInstancesOutsideArrangementLength({
 
 function getDefaultClipInstanceLength({
   clip,
+  sourceBpm,
   tempoBpm,
 }: {
   clip: Clip;
+  sourceBpm?: number;
   tempoBpm: number;
 }): Tick {
   if (isHybridClip(clip)) {
@@ -243,9 +256,15 @@ function getDefaultClipInstanceLength({
   }
 
   if (isAudioClip(clip)) {
+    const durationTempoBpm = isValidImportedAudioSourceBpm(sourceBpm)
+      ? sourceBpm
+      : tempoBpm;
+
     return Math.max(
       ARRANGEMENT_SNAP_TICKS,
-      ceilTickToSnap(secondsToTicks(clip.durationSeconds, { tempoBpm })),
+      ceilTickToSnap(
+        secondsToTicks(clip.durationSeconds, { tempoBpm: durationTempoBpm }),
+      ),
     );
   }
 

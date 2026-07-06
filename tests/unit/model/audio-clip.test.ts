@@ -5,8 +5,10 @@ import {
   createImportedAudioClipDraft,
   createImportedAudioDisplayName,
   createImportedAudioIds,
+  getImportedAudioStretchRate,
   getClipDeleteConfirmationMessage,
   toggleDrumStep,
+  validateImportedAudioSourceBpm,
   validateImportedWavFile,
 } from "../../../src/model";
 
@@ -83,6 +85,36 @@ describe("audio clip model", () => {
         mimeType: "audio/wav",
       },
     });
+  });
+
+  it("stores optional imported audio source BPM metadata", () => {
+    const draft = createImportedAudioClipDraft({
+      clipId: "audio-clip-loop",
+      durationSeconds: 2.5,
+      fileName: "Loop.wav",
+      mimeType: "audio/wav",
+      sampleId: "imported-audio-loop",
+      sourceBpm: 96.5,
+    });
+
+    expect(draft.sampleMeta.source.sourceBpm).toBe(96.5);
+  });
+
+  it("validates imported audio source BPM and derives stretch rate", () => {
+    expect(() => validateImportedAudioSourceBpm(40)).not.toThrow();
+    expect(() => validateImportedAudioSourceBpm(250)).not.toThrow();
+    expect(() => validateImportedAudioSourceBpm(39.99)).toThrow(
+      "Source BPM must be between 40 and 250.",
+    );
+    expect(() => validateImportedAudioSourceBpm(250.01)).toThrow(
+      "Source BPM must be between 40 and 250.",
+    );
+    expect(
+      getImportedAudioStretchRate({
+        projectBpm: 150,
+        sourceBpm: 120,
+      }),
+    ).toBeCloseTo(1.25);
   });
 
   it("does not require confirmation for empty unused hybrid clips", () => {

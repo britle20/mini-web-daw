@@ -1,9 +1,12 @@
 import {
+  getImportedAudioStretchRate,
   isAudioClip,
   isHybridClip,
   type Clip,
   type ClipInstance,
+  type SampleMeta,
 } from "../model";
+import { ticksToSeconds } from "../utils";
 import type { NoteLoopEvent, SampleLoopEvent } from "./types";
 
 export interface ArrangementPlaybackEvents {
@@ -15,11 +18,18 @@ export interface ArrangementPlaybackEvents {
 export function expandClipInstancesForPlayback({
   clipInstances,
   clips,
+  projectBpm,
+  sampleMetas = [],
 }: {
   clipInstances: readonly ClipInstance[];
   clips: readonly Clip[];
+  projectBpm?: number;
+  sampleMetas?: readonly SampleMeta[];
 }): ArrangementPlaybackEvents {
   const clipsById = new Map(clips.map((clip) => [clip.id, clip]));
+  const sampleMetasById = new Map(
+    sampleMetas.map((sampleMeta) => [sampleMeta.id, sampleMeta]),
+  );
   const missingClipIds: string[] = [];
   const noteEvents: NoteLoopEvent[] = [];
   const sampleEvents: SampleLoopEvent[] = [];
@@ -34,14 +44,35 @@ export function expandClipInstancesForPlayback({
 
     if (isAudioClip(clip)) {
       if (instance.lengthTicks > 0) {
-        sampleEvents.push({
+        const sourceBpm = sampleMetasById.get(clip.sampleId)?.source.sourceBpm;
+        const sampleEvent: SampleLoopEvent = {
           durationTicks: instance.lengthTicks,
           id: `${instance.id}:audio`,
           sampleId: clip.sampleId,
-          sourceOffsetSeconds: instance.sourceOffsetSeconds,
           startTick: instance.startTick,
           trackId: instance.trackId,
-        });
+        };
+
+        if (typeof instance.sourceOffsetSeconds === "number") {
+          sampleEvent.sourceOffsetSeconds = instance.sourceOffsetSeconds;
+        }
+
+        if (typeof sourceBpm === "number") {
+          sampleEvent.sourceBpm = sourceBpm;
+        }
+
+        if (typeof sourceBpm === "number" && typeof projectBpm === "number") {
+          sampleEvent.playbackDurationSeconds = ticksToSeconds(
+            instance.lengthTicks,
+            { tempoBpm: projectBpm },
+          );
+          sampleEvent.stretchRate = getImportedAudioStretchRate({
+            projectBpm,
+            sourceBpm,
+          });
+        }
+
+        sampleEvents.push(sampleEvent);
       }
 
       continue;

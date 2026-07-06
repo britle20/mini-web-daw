@@ -11,6 +11,7 @@ export interface SampleMeta {
     fileName?: string;
     mimeType?: string;
     path?: string;
+    sourceBpm?: number;
   };
 }
 
@@ -48,6 +49,9 @@ const WAV_MIME_TYPES = new Set([
   "audio/x-wav",
   "audio/vnd.wave",
 ]);
+export const DEFAULT_IMPORTED_AUDIO_SOURCE_BPM = 120;
+export const MIN_IMPORTED_AUDIO_SOURCE_BPM = 40;
+export const MAX_IMPORTED_AUDIO_SOURCE_BPM = 250;
 
 export function isAudioClip(clip: { kind?: string }): clip is AudioClip {
   return clip.kind === "audio";
@@ -105,6 +109,47 @@ export function validateImportedWavFile(file: ImportedAudioFileLike): void {
   }
 }
 
+export function validateImportedAudioSourceBpm(sourceBpm: number): void {
+  if (
+    !Number.isFinite(sourceBpm) ||
+    sourceBpm < MIN_IMPORTED_AUDIO_SOURCE_BPM ||
+    sourceBpm > MAX_IMPORTED_AUDIO_SOURCE_BPM
+  ) {
+    throw new Error(
+      `Source BPM must be between ${MIN_IMPORTED_AUDIO_SOURCE_BPM} and ${MAX_IMPORTED_AUDIO_SOURCE_BPM}.`,
+    );
+  }
+}
+
+export function isValidImportedAudioSourceBpm(
+  sourceBpm: number | undefined,
+): sourceBpm is number {
+  return (
+    typeof sourceBpm === "number" &&
+    Number.isFinite(sourceBpm) &&
+    sourceBpm >= MIN_IMPORTED_AUDIO_SOURCE_BPM &&
+    sourceBpm <= MAX_IMPORTED_AUDIO_SOURCE_BPM
+  );
+}
+
+export function getImportedAudioStretchRate({
+  projectBpm,
+  sourceBpm,
+}: {
+  projectBpm: number;
+  sourceBpm: number;
+}): number {
+  validateImportedAudioSourceBpm(sourceBpm);
+
+  if (!Number.isFinite(projectBpm) || projectBpm <= 0) {
+    throw new Error(
+      `projectBpm must be a positive finite number. Received ${projectBpm}.`,
+    );
+  }
+
+  return projectBpm / sourceBpm;
+}
+
 export function createImportedAudioDisplayName(fileName: string): string {
   const baseName = getBaseFileName(fileName);
   const withoutExtension = baseName.replace(/\.[^.]+$/u, "");
@@ -141,6 +186,7 @@ export function createImportedAudioClipDraft({
   fileName,
   mimeType,
   sampleId,
+  sourceBpm,
 }: {
   byteLength?: number;
   clipId: string;
@@ -149,6 +195,7 @@ export function createImportedAudioClipDraft({
   fileName: string;
   mimeType: string;
   sampleId: string;
+  sourceBpm?: number;
 }): ImportedAudioClipDraft {
   const name = createImportedAudioDisplayName(fileName);
   const normalizedMimeType = mimeType || "audio/wav";
@@ -164,6 +211,11 @@ export function createImportedAudioClipDraft({
 
   if (contentHashSha256) {
     source.contentHashSha256 = contentHashSha256;
+  }
+
+  if (typeof sourceBpm === "number") {
+    validateImportedAudioSourceBpm(sourceBpm);
+    source.sourceBpm = sourceBpm;
   }
 
   return {
