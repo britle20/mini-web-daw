@@ -591,6 +591,7 @@ export function ProjectSidebar({
                 <Icon name="folder_zip" />
                 <span>Export Project Bundle</span>
               </button>
+              <div className={styles.exportMenuDivider} role="separator" />
               <button
                 className={styles.exportMenuItem}
                 onClick={handleArrangementExportClick}

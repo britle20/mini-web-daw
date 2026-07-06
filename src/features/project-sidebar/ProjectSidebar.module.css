@@ -399,6 +399,11 @@
   color: var(--color-text);
 }
 
+.exportMenuDivider {
+  border-top: 1px solid var(--color-outline-variant);
+  margin: var(--space-unit) 0;
+}
+
 .exportMenuItem span {
   min-width: 0;
   overflow: hidden;
