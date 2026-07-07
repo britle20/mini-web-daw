@@ -764,6 +764,10 @@ export function App() {
     bpmRef.current = snapshot.tempoBpm;
     setBpm(snapshot.tempoBpm);
     commitPlayheadTick(snapshot.currentTick);
+
+    if (transportState === "playing" && transportMode === "song") {
+      void restartArrangementPlayback(snapshot.currentTick);
+    }
   }
 
   function commitClipInstances(nextClipInstances: ClipInstance[]) {

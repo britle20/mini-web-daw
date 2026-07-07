@@ -660,7 +660,6 @@ export class BrowserAudioEngine implements AudioEngine {
         active: true,
         input: sourceOffsetSeconds,
         output: startTime,
-        outputTime: startTime,
         rate: stretchRate,
         semitones: 0,
       });
