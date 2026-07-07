@@ -93,8 +93,9 @@ The local spike found that the stretch node can occasionally fail to start if sc
 - Source BPM is stored on `SampleMeta.source.sourceBpm`.
 - Imported audio arrangement events carry runtime-only `sourceBpm`, `stretchRate`, and `playbackDurationSeconds` values derived from project BPM at playback/event-build time.
 - Live `SONG` playback uses `projectBpm / sourceBpm` to tempo-sync imported audio clips.
-- The currently enabled live arrangement path uses `AudioBufferSourceNode.playbackRate` so imported clips remain audible and tempo-following. This does not preserve pitch.
-- `signalsmith-stretch` remains isolated behind `BrowserAudioEngine`, but pitch-preserving arrangement playback should stay disabled until the AudioWorklet scheduling path is reliable in the full arrangement transport.
+- The target live arrangement path uses `signalsmith-stretch` with `semitones = 0` so imported clips remain pitch-preserving while following project BPM.
+- `AudioBufferSourceNode.playbackRate` remains available as an emergency fallback, but it is not pitch-preserving.
+- `signalsmith-stretch` remains isolated behind `BrowserAudioEngine`; React components do not call the stretch library directly.
 - Offline arrangement WAV export stretch remains deferred to issue #6.
 
 ## Done when

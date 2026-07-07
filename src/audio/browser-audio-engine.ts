@@ -48,7 +48,7 @@ const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
-const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = false;
+const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -522,6 +522,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
         await stretchNode.configure({ preset: "default" });
         await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
+        await stretchNode.setUpdateInterval(0.1);
         const latencySeconds = await stretchNode.latency();
         gainNode.gain.value = 0;
         stretchNode.connect(gainNode);
@@ -596,6 +597,7 @@ export class BrowserAudioEngine implements AudioEngine {
       active: true,
       input: sourceOffsetSeconds,
       output: startTime,
+      outputTime: startTime,
       rate: stretchRate,
       semitones: 0,
     });

@@ -25,6 +25,10 @@ declare module "signalsmith-stretch" {
       options: SignalsmithStretchScheduleOptions,
       adjustPrevious?: boolean,
     ): Promise<SignalsmithStretchScheduleOptions>;
+    setUpdateInterval(
+      seconds: number,
+      callback?: (inputTimeSeconds: number) => void,
+    ): Promise<void>;
     stop(when?: number): Promise<SignalsmithStretchScheduleOptions>;
   }
 
