@@ -46,8 +46,8 @@ import {
 const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
-const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
-const STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS = 0.2;
+const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
+const STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS = 0.5;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
@@ -96,6 +96,10 @@ export function createAudioEngine(
 export class BrowserAudioEngine implements AudioEngine {
   private readonly samplesById: Map<SampleId, BundledSampleMeta>;
   private readonly sampleCache = new Map<SampleId, AudioBuffer>();
+  private readonly stretchChannelBufferCache = new Map<
+    SampleId,
+    [Float32Array, Float32Array]
+  >();
   private readonly loadingSamples = new Map<SampleId, Promise<AudioBuffer>>();
   private readonly activeNoteVoices = new Set<ActiveNoteVoice>();
   private readonly activeSampleVoices = new Set<ActiveSamplePreview>();
@@ -215,6 +219,7 @@ export class BrowserAudioEngine implements AudioEngine {
     const sample = this.getSample(sampleId);
     const loadPromise = this.fetchAndDecodeSample(sample)
       .then((audioBuffer) => {
+        this.stretchChannelBufferCache.delete(sampleId);
         this.sampleCache.set(sampleId, audioBuffer);
         return audioBuffer;
       })
@@ -254,6 +259,7 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     this.loadingSamples.delete(sampleId);
+    this.stretchChannelBufferCache.delete(sampleId);
     this.sampleCache.set(sampleId, audioBuffer);
     return audioBuffer;
   }
@@ -570,7 +576,9 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     await stretchNode.configure({ preset: "default" });
-    await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
+    await stretchNode.addBuffers(
+      this.getStretchChannelBuffers(event.sampleId, audioBuffer),
+    );
     await stretchNode.setUpdateInterval(0.1, (inputTimeSeconds) => {
       this.setStretchedSampleDebug(event, {
         currentAudioTime: this.audioContext?.currentTime,
@@ -678,6 +686,22 @@ export class BrowserAudioEngine implements AudioEngine {
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
       Math.max(0, Math.ceil((stopTime - audioContext.currentTime + 0.1) * 1000)),
     );
+  }
+
+  private getStretchChannelBuffers(
+    sampleId: SampleId,
+    audioBuffer: AudioBuffer,
+  ): [Float32Array, Float32Array] {
+    const cachedBuffers = this.stretchChannelBufferCache.get(sampleId);
+
+    if (cachedBuffers) {
+      return cachedBuffers;
+    }
+
+    const channelBuffers = createStretchChannelBuffers(audioBuffer);
+
+    this.stretchChannelBufferCache.set(sampleId, channelBuffers);
+    return channelBuffers;
   }
 
   private scheduleLoadedSample(

@@ -113,6 +113,9 @@ export function ArrangementView({
   const latestStretchDebugSnapshot = getLatestStretchDebugSnapshot(
     stretchDebugSnapshots,
   );
+  const activeStretchDebugSnapshotCount = stretchDebugSnapshots.filter(
+    (snapshot) => snapshot.status !== "stopped",
+  ).length;
   const barNumbers = Array.from(
     { length: arrangementLengthBars },
     (_, index) => index + 1,
@@ -251,7 +254,11 @@ export function ArrangementView({
         </div>
         <div className={styles.toolbarControls}>
           {latestStretchDebugSnapshot ? (
-            <StretchDebugBadge snapshot={latestStretchDebugSnapshot} />
+            <StretchDebugBadge
+              activeCount={activeStretchDebugSnapshotCount}
+              snapshot={latestStretchDebugSnapshot}
+              totalCount={stretchDebugSnapshots.length}
+            />
           ) : null}
           {errorMessage ? (
             <p className={styles.errorBadge}>{errorMessage}</p>
@@ -500,9 +507,13 @@ function ClipContent({ kind }: { kind: "audio" | "midi" }) {
 }
 
 function StretchDebugBadge({
+  activeCount,
   snapshot,
+  totalCount,
 }: {
+  activeCount: number;
   snapshot: StretchedSampleDebugSnapshot;
+  totalCount: number;
 }) {
   const isError = snapshot.status === "error";
 
@@ -517,7 +528,8 @@ function StretchDebugBadge({
       <code>
         {snapshot.status} rate {formatDebugRate(snapshot.stretchRate)} input{" "}
         {formatDebugSeconds(snapshot.inputTimeSeconds)} lat{" "}
-        {formatDebugSeconds(snapshot.latencySeconds)}
+        {formatDebugSeconds(snapshot.latencySeconds)} active {activeCount}/
+        {totalCount}
       </code>
     </div>
   );
@@ -526,7 +538,13 @@ function StretchDebugBadge({
 function getLatestStretchDebugSnapshot(
   snapshots: readonly StretchedSampleDebugSnapshot[],
 ): StretchedSampleDebugSnapshot | null {
-  return snapshots.reduce<StretchedSampleDebugSnapshot | null>(
+  const activeSnapshots = snapshots.filter(
+    (snapshot) => snapshot.status !== "stopped",
+  );
+  const snapshotsToCompare =
+    activeSnapshots.length > 0 ? activeSnapshots : snapshots;
+
+  return snapshotsToCompare.reduce<StretchedSampleDebugSnapshot | null>(
     (latestSnapshot, snapshot) =>
       latestSnapshot && latestSnapshot.updatedAt > snapshot.updatedAt
         ? latestSnapshot
