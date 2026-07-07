@@ -55,6 +55,7 @@ export interface LookaheadSchedulerOptions<TEvent extends TickEvent> {
   ppq?: number;
   scheduleAheadTime?: number;
   setIntervalFn?: SetSchedulerInterval;
+  startDelaySeconds?: number;
   tempoBpm: number;
 }
 
@@ -172,6 +173,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
   private readonly scheduleAheadTime: number;
   private readonly scheduleEvent: (scheduledEvent: ScheduledTickEvent<TEvent>) => void;
   private readonly setIntervalFn: SetSchedulerInterval;
+  private readonly startDelaySeconds: number;
   private audioStartTime: number | null = null;
   private events: readonly TEvent[];
   private nextScheduleTick: Tick;
@@ -195,10 +197,12 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     scheduleAheadTime = DEFAULT_SCHEDULE_AHEAD_TIME,
     scheduleEvent,
     setIntervalFn = defaultSetSchedulerInterval,
+    startDelaySeconds = 0,
     tempoBpm,
   }: LookaheadSchedulerOptions<TEvent>) {
     validateLoopRange(loopStartTick, loopEndTick);
     validateTempoBpm(tempoBpm);
+    validateStartDelaySeconds(startDelaySeconds);
 
     this.clearIntervalFn = clearIntervalFn;
     this.events = events;
@@ -211,6 +215,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     this.scheduleAheadTime = scheduleAheadTime;
     this.scheduleEvent = scheduleEvent;
     this.setIntervalFn = setIntervalFn;
+    this.startDelaySeconds = startDelaySeconds;
     this.startTick = loopStartTick;
     this.tempoBpm = tempoBpm;
   }
@@ -221,7 +226,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     }
 
     this.startTick = this.normalizeLoopTick(startTick);
-    this.audioStartTime = this.getAudioTime();
+    this.audioStartTime = this.getAudioTime() + this.startDelaySeconds;
     this.nextScheduleTick = this.startTick;
     this.status = "playing";
     this.scheduleNextWindow();
@@ -313,6 +318,10 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
       return this.startTick;
     }
 
+    if (audioTime <= this.audioStartTime) {
+      return this.startTick;
+    }
+
     return audioTimeToTick({
       audioStartTime: this.audioStartTime,
       audioTime,
@@ -394,5 +403,13 @@ function validateLoopRange(loopStartTick: Tick, loopEndTick: Tick): void {
 function validateTempoBpm(tempoBpm: number): void {
   if (!Number.isFinite(tempoBpm) || tempoBpm <= 0) {
     throw new Error(`tempoBpm must be a positive finite number. Received ${tempoBpm}.`);
+  }
+}
+
+function validateStartDelaySeconds(startDelaySeconds: number): void {
+  if (!Number.isFinite(startDelaySeconds) || startDelaySeconds < 0) {
+    throw new Error(
+      `startDelaySeconds must be a non-negative finite number. Received ${startDelaySeconds}.`,
+    );
   }
 }

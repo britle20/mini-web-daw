@@ -45,7 +45,8 @@ import {
 const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
-const STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
+const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
+const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -69,6 +70,7 @@ interface ActiveSamplePreview {
 interface ActiveStretchedSampleVoice {
   gainNode: GainNode;
   gainValue: number;
+  latencySeconds: number;
   sampleId: SampleId;
   stretchNode: SignalsmithStretchNode;
   trackId?: TrackId;
@@ -315,13 +317,15 @@ export class BrowserAudioEngine implements AudioEngine {
     ]);
 
     this.stopLoop();
-    await this.prepareStretchedSampleVoices(sampleEvents);
+    const stretchedSampleStartDelaySeconds =
+      await this.prepareStretchedSampleVoices(sampleEvents);
 
     const audioContext = this.getOrCreateAudioContext();
     const normalizedScheduleAheadTime = hasStretchedSampleEvents(sampleEvents)
       ? Math.max(
           scheduleAheadTime ?? 0,
-          STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS,
+          MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS,
+          stretchedSampleStartDelaySeconds + 0.05,
         )
       : scheduleAheadTime;
 
@@ -356,6 +360,7 @@ export class BrowserAudioEngine implements AudioEngine {
           when: audioTime,
         });
       },
+      startDelaySeconds: stretchedSampleStartDelaySeconds,
       tempoBpm: normalizedTempoBpm,
     });
     this.tempoBpm = normalizedTempoBpm;
@@ -463,9 +468,10 @@ export class BrowserAudioEngine implements AudioEngine {
 
   private async prepareStretchedSampleVoices(
     events: readonly SampleLoopEvent[],
-  ): Promise<void> {
+  ): Promise<number> {
     const stretchedEvents = events.filter(isStretchedSampleEvent);
     const stretchedEventIds = new Set(stretchedEvents.map((event) => event.id));
+    let startDelaySeconds = 0;
 
     for (const [eventId, voice] of this.stretchedSampleVoicesByEventId) {
       if (!stretchedEventIds.has(eventId)) {
@@ -485,6 +491,10 @@ export class BrowserAudioEngine implements AudioEngine {
           existingVoice.trackId === event.trackId &&
           existingVoice.gainValue === gainValue
         ) {
+          startDelaySeconds = Math.max(
+            startDelaySeconds,
+            existingVoice.latencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
+          );
           return;
         }
 
@@ -511,6 +521,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
         await stretchNode.configure({ preset: "default" });
         await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
+        const latencySeconds = await stretchNode.latency();
         gainNode.gain.value = gainValue;
         stretchNode.connect(gainNode);
         this.connectSourceGain(gainNode, event.trackId);
@@ -518,6 +529,7 @@ export class BrowserAudioEngine implements AudioEngine {
         const voice = {
           gainNode,
           gainValue,
+          latencySeconds,
           sampleId: event.sampleId,
           stretchNode,
           trackId: event.trackId,
@@ -525,8 +537,14 @@ export class BrowserAudioEngine implements AudioEngine {
 
         this.activeStretchedSampleVoices.add(voice);
         this.stretchedSampleVoicesByEventId.set(event.id, voice);
+        startDelaySeconds = Math.max(
+          startDelaySeconds,
+          latencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
+        );
       }),
     );
+
+    return startDelaySeconds;
   }
 
   private scheduleStretchedSample(

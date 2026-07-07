@@ -61,6 +61,8 @@ The stretch path preserves pitch and lives inside the audio engine. `signalsmith
 
 Project BPM changes should apply to imported audio stretch on the next playback start. Do not attempt live stretch-ratio changes for already-playing imported audio in the first implementation.
 
+When a loop contains stretched imported audio, the scheduler should start against an audio time far enough in the future for the stretch node to compensate for its own latency. Increasing the lookahead window alone is not enough if the first event is still scheduled at `AudioContext.currentTime`.
+
 ## Arrangement Playback
 
 `PAT` mode playback targets the selected clip editor. `SONG` mode playback should target placed `ClipInstance` objects on the arrangement timeline.

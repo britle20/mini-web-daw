@@ -173,6 +173,32 @@ describe("LookaheadScheduler", () => {
     ).toEqual([["at-start", 480, 10]]);
   });
 
+  it("can delay transport audio start while keeping the current tick stable", () => {
+    let audioTime = 10;
+    const scheduledEvents: ScheduledTickEvent<TestEvent>[] = [];
+    const scheduler = new LookaheadScheduler<TestEvent>({
+      events: [{ id: "start", label: "start", startTick: 0 }],
+      getAudioTime: () => audioTime,
+      scheduleAheadTime: 0.25,
+      scheduleEvent: (scheduledEvent) => {
+        scheduledEvents.push(scheduledEvent);
+      },
+      setIntervalFn: () => 1,
+      startDelaySeconds: 0.12,
+      tempoBpm: 120,
+    });
+
+    const snapshot = scheduler.start();
+
+    expect(snapshot.currentTick).toBe(0);
+    expect(snapshot.audioStartTime).toBeCloseTo(10.12);
+    expect(scheduledEvents[0]?.audioTime).toBeCloseTo(10.12);
+
+    audioTime = 10.06;
+
+    expect(scheduler.getSnapshot().currentTick).toBe(0);
+  });
+
   it("pauses at the current loop tick and resumes from that tick", () => {
     let audioTime = 0;
     let intervalHandler: (() => void) | undefined;
