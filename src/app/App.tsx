@@ -9,6 +9,7 @@ import {
   type MixerLevelSnapshot,
   type NoteLoopEvent,
   type SampleLoopEvent,
+  type StretchedSampleDebugSnapshot,
 } from "../audio";
 import {
   AudioClipDetails,
@@ -314,6 +315,9 @@ export function App() {
   const [mixerLevels, setMixerLevels] = useState<MixerLevelSnapshot>(() =>
     createEmptyMixerLevels(arrangementTracks),
   );
+  const [stretchDebugSnapshots, setStretchDebugSnapshots] = useState<
+    StretchedSampleDebugSnapshot[]
+  >([]);
   const [arrangementLoopRange, setArrangementLoopRange] =
     useState<ArrangementLoopRange>(() =>
       createDefaultArrangementLoopRange(arrangementLengthBars),
@@ -650,7 +654,10 @@ export function App() {
     const trackIds = arrangementTracks.map((track) => track.id);
 
     function updateMixerLevels() {
+      const audioSnapshot = audioEngine.getSnapshot();
+
       setMixerLevels(audioEngine.getMixerLevels(trackIds));
+      setStretchDebugSnapshots(audioSnapshot.stretchedSamples);
       animationFrameId = window.requestAnimationFrame(updateMixerLevels);
     }
 
@@ -2893,6 +2900,7 @@ export function App() {
               mixerLevels={mixerLevels}
               selectedClipInstanceId={selectedClipInstanceId}
               shouldShowPlayhead={shouldShowPlayhead}
+              stretchDebugSnapshots={stretchDebugSnapshots}
               trackMixerStates={trackMixerStates}
               tracks={arrangementTracks}
             />

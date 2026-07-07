@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import { Icon } from "../../components";
-import type { MixerLevelSnapshot } from "../../audio";
+import type { MixerLevelSnapshot, StretchedSampleDebugSnapshot } from "../../audio";
 import {
   ARRANGEMENT_CLIP_DRAG_TYPE,
   ARRANGEMENT_CLIP_INSTANCE_DRAG_TYPE,
@@ -65,6 +65,7 @@ interface ArrangementViewProps {
   playheadTick: Tick;
   selectedClipInstanceId: string | null;
   shouldShowPlayhead: boolean;
+  stretchDebugSnapshots: readonly StretchedSampleDebugSnapshot[];
   trackMixerStates: readonly TrackMixerState[];
   tracks: readonly ArrangementTrack[];
 }
@@ -95,6 +96,7 @@ export function ArrangementView({
   playheadTick,
   selectedClipInstanceId,
   shouldShowPlayhead,
+  stretchDebugSnapshots,
   trackMixerStates,
   tracks,
 }: ArrangementViewProps) {
@@ -107,6 +109,9 @@ export function ArrangementView({
   );
   const activeTrackIds = new Set(
     clipInstances.map((instance) => instance.trackId),
+  );
+  const latestStretchDebugSnapshot = getLatestStretchDebugSnapshot(
+    stretchDebugSnapshots,
   );
   const barNumbers = Array.from(
     { length: arrangementLengthBars },
@@ -245,6 +250,9 @@ export function ArrangementView({
           <p className={styles.eyebrow}>ARRANGEMENT</p>
         </div>
         <div className={styles.toolbarControls}>
+          {latestStretchDebugSnapshot ? (
+            <StretchDebugBadge snapshot={latestStretchDebugSnapshot} />
+          ) : null}
           {errorMessage ? (
             <p className={styles.errorBadge}>{errorMessage}</p>
           ) : null}
@@ -489,6 +497,73 @@ function ClipContent({ kind }: { kind: "audio" | "midi" }) {
       <rect height="4" rx="1" width="12" x="82" y="17" />
     </svg>
   );
+}
+
+function StretchDebugBadge({
+  snapshot,
+}: {
+  snapshot: StretchedSampleDebugSnapshot;
+}) {
+  const isError = snapshot.status === "error";
+
+  return (
+    <div
+      className={`${styles.stretchDebugBadge} ${
+        isError ? styles.stretchDebugBadgeError : ""
+      }`}
+      title={createStretchDebugTitle(snapshot)}
+    >
+      <span>Stretch</span>
+      <code>
+        {snapshot.status} rate {formatDebugRate(snapshot.stretchRate)} input{" "}
+        {formatDebugSeconds(snapshot.inputTimeSeconds)} lat{" "}
+        {formatDebugSeconds(snapshot.latencySeconds)}
+      </code>
+    </div>
+  );
+}
+
+function getLatestStretchDebugSnapshot(
+  snapshots: readonly StretchedSampleDebugSnapshot[],
+): StretchedSampleDebugSnapshot | null {
+  return snapshots.reduce<StretchedSampleDebugSnapshot | null>(
+    (latestSnapshot, snapshot) =>
+      latestSnapshot && latestSnapshot.updatedAt > snapshot.updatedAt
+        ? latestSnapshot
+        : snapshot,
+    null,
+  );
+}
+
+function createStretchDebugTitle(
+  snapshot: StretchedSampleDebugSnapshot,
+): string {
+  const debugLines = [
+    `event: ${snapshot.eventId}`,
+    `sample: ${snapshot.sampleId}`,
+    `status: ${snapshot.status}`,
+    `rate: ${formatDebugRate(snapshot.stretchRate)}`,
+    `input: ${formatDebugSeconds(snapshot.inputTimeSeconds)}`,
+    `latency: ${formatDebugSeconds(snapshot.latencySeconds)}`,
+    `current audio: ${formatDebugSeconds(snapshot.currentAudioTime)}`,
+    `scheduled start: ${formatDebugSeconds(snapshot.scheduledStartTime)}`,
+    `scheduled stop: ${formatDebugSeconds(snapshot.scheduledStopTime)}`,
+    `duration: ${formatDebugSeconds(snapshot.playbackDurationSeconds)}`,
+  ];
+
+  if (snapshot.errorMessage) {
+    debugLines.push(`error: ${snapshot.errorMessage}`);
+  }
+
+  return debugLines.join("\n");
+}
+
+function formatDebugSeconds(value: number | undefined): string {
+  return typeof value === "number" ? `${value.toFixed(2)}s` : "-";
+}
+
+function formatDebugRate(value: number | undefined): string {
+  return typeof value === "number" ? `${value.toFixed(3)}x` : "-";
 }
 
 function getLoopRegionStyle(loopRange: ArrangementLoopRange): CSSProperties {
