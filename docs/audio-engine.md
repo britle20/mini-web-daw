@@ -57,7 +57,9 @@ BPM-aware imported audio playback requires source BPM metadata for newly importe
 stretchRate = projectBpm / sourceBpm
 ```
 
-The stretch path preserves pitch and lives inside the audio engine. `signalsmith-stretch` is a justified production dependency because the Web Audio API does not provide high-quality pitch-preserving time stretching natively. Keep the dependency behind the typed audio-engine API and do not call it from React components. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound, but startup should use a conservative schedule lead time or retry behavior because very tight start scheduling can fail to advance.
+The intended stretch path preserves pitch and lives inside the audio engine. `signalsmith-stretch` is a justified production dependency candidate because the Web Audio API does not provide high-quality pitch-preserving time stretching natively. Keep the dependency behind the typed audio-engine API and do not call it from React components. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound, but arrangement integration needs dedicated validation before it is enabled by default.
+
+Until the pitch-preserving stretch path is reliable in arrangement playback, imported audio clips may use an `AudioBufferSourceNode.playbackRate` fallback derived from `projectBpm / sourceBpm`. This keeps clips audible and tempo-following, but it does not preserve pitch.
 
 Project BPM changes should apply to imported audio stretch on the next playback start. Do not attempt live stretch-ratio changes for already-playing imported audio in the first implementation.
 

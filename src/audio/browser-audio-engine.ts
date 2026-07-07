@@ -48,6 +48,7 @@ const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
+const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = false;
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -348,9 +349,8 @@ export class BrowserAudioEngine implements AudioEngine {
             return;
           }
 
-          this.scheduleLoadedSample(event.sampleId, {
-            gain: event.gain,
-            trackId: event.trackId,
+          this.scheduleSampleLoopEvent(event, {
+            tempoBpm: scheduledTempoBpm,
             when: audioTime,
           });
           return;
@@ -642,6 +642,82 @@ export class BrowserAudioEngine implements AudioEngine {
     sourceNode.start(
       Math.max(options.when ?? audioContext.currentTime, audioContext.currentTime),
     );
+
+    return sampleVoice;
+  }
+
+  private scheduleSampleLoopEvent(
+    event: SampleLoopEvent,
+    {
+      tempoBpm,
+      when,
+    }: {
+      tempoBpm: number;
+      when: number;
+    },
+  ): ActiveSamplePreview | null {
+    if (!isRangedSampleEvent(event)) {
+      return this.scheduleLoadedSample(event.sampleId, {
+        gain: event.gain,
+        trackId: event.trackId,
+        when,
+      });
+    }
+
+    const audioContext = this.getOrCreateAudioContext();
+    const audioBuffer = this.sampleCache.get(event.sampleId);
+
+    if (!audioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before scheduling.`);
+    }
+
+    const sourceOffsetSeconds = Math.max(event.sourceOffsetSeconds ?? 0, 0);
+
+    if (sourceOffsetSeconds >= audioBuffer.duration) {
+      return null;
+    }
+
+    const playbackRate =
+      typeof event.stretchRate === "number" && event.stretchRate > 0
+        ? event.stretchRate
+        : 1;
+    const playbackDurationSeconds =
+      event.playbackDurationSeconds ??
+      (typeof event.durationTicks === "number"
+        ? ticksToSeconds(event.durationTicks, { tempoBpm })
+        : (audioBuffer.duration - sourceOffsetSeconds) / playbackRate);
+    const remainingOutputSeconds =
+      (audioBuffer.duration - sourceOffsetSeconds) / playbackRate;
+    const durationSeconds = Math.max(
+      0.01,
+      Math.min(playbackDurationSeconds, remainingOutputSeconds),
+    );
+    const sourceNode = audioContext.createBufferSource();
+    const gainNode = audioContext.createGain();
+    const startTime = Math.max(when, audioContext.currentTime);
+    const sampleVoice = {
+      gainNode,
+      sourceNode,
+    };
+
+    sourceNode.buffer = audioBuffer;
+    sourceNode.playbackRate.setValueAtTime(playbackRate, startTime);
+    gainNode.gain.value = event.gain ?? DEFAULT_SAMPLE_GAIN;
+    sourceNode.connect(gainNode);
+    this.connectSourceGain(gainNode, event.trackId);
+
+    this.activeSampleVoices.add(sampleVoice);
+    sourceNode.addEventListener(
+      "ended",
+      () => {
+        this.activeSampleVoices.delete(sampleVoice);
+        disconnectAudioNode(sourceNode);
+        disconnectAudioNode(gainNode);
+      },
+      { once: true },
+    );
+    sourceNode.start(startTime, sourceOffsetSeconds);
+    sourceNode.stop(startTime + durationSeconds);
 
     return sampleVoice;
   }
@@ -1128,7 +1204,20 @@ function hasStretchedSampleEvents(
 function isStretchedSampleEvent(
   event: SampleLoopEvent,
 ): event is SampleLoopEvent & { stretchRate: number } {
-  return typeof event.stretchRate === "number" && Number.isFinite(event.stretchRate);
+  return (
+    ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH &&
+    typeof event.stretchRate === "number" &&
+    Number.isFinite(event.stretchRate)
+  );
+}
+
+function isRangedSampleEvent(event: SampleLoopEvent): boolean {
+  return (
+    typeof event.durationTicks === "number" ||
+    typeof event.playbackDurationSeconds === "number" ||
+    typeof event.sourceOffsetSeconds === "number" ||
+    typeof event.stretchRate === "number"
+  );
 }
 
 function createStretchChannelBuffers(
