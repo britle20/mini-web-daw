@@ -47,6 +47,7 @@ const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
+const STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS = 0.2;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
@@ -71,13 +72,11 @@ interface ActiveSamplePreview {
 }
 
 interface ActiveStretchedSampleVoice {
+  cleanupTimerId?: ReturnType<typeof globalThis.setTimeout>;
   eventId: string;
   gainNode: GainNode;
-  gainValue: number;
-  latencySeconds: number;
   sampleId: SampleId;
   stretchNode: SignalsmithStretchNode;
-  trackId?: TrackId;
 }
 
 interface MixerRoute {
@@ -102,10 +101,6 @@ export class BrowserAudioEngine implements AudioEngine {
   private readonly activeSampleVoices = new Set<ActiveSamplePreview>();
   private readonly activeStretchedSampleVoices =
     new Set<ActiveStretchedSampleVoice>();
-  private readonly stretchedSampleVoicesByEventId = new Map<
-    string,
-    ActiveStretchedSampleVoice
-  >();
   private readonly stretchedSampleDebugByEventId = new Map<
     string,
     StretchedSampleDebugSnapshot
@@ -349,9 +344,18 @@ export class BrowserAudioEngine implements AudioEngine {
       scheduleEvent: ({ audioTime, event, tempoBpm: scheduledTempoBpm }) => {
         if (event.kind === "sample") {
           if (isStretchedSampleEvent(event)) {
-            this.scheduleStretchedSample(event, {
+            void this.scheduleStretchedSample(event, {
+              scheduleToken: this.sampleLoopUpdateToken,
               tempoBpm: scheduledTempoBpm,
               when: audioTime,
+            }).catch((error: unknown) => {
+              this.setStretchedSampleDebug(event, {
+                errorMessage:
+                  error instanceof Error
+                    ? error.message
+                    : "Stretch scheduling failed.",
+                status: "error",
+              });
             });
             return;
           }
@@ -481,92 +485,30 @@ export class BrowserAudioEngine implements AudioEngine {
     const stretchedEventIds = new Set(stretchedEvents.map((event) => event.id));
     let startDelaySeconds = 0;
 
-    for (const [eventId, voice] of this.stretchedSampleVoicesByEventId) {
-      if (!stretchedEventIds.has(eventId)) {
-        this.stopAndDisconnectStretchedSampleVoice(voice);
-        this.stretchedSampleVoicesByEventId.delete(eventId);
+    for (const snapshot of this.stretchedSampleDebugByEventId.values()) {
+      if (!stretchedEventIds.has(snapshot.eventId)) {
+        this.stretchedSampleDebugByEventId.delete(snapshot.eventId);
       }
     }
 
-    await Promise.all(
-      stretchedEvents.map(async (event) => {
-        const gainValue = DEFAULT_SAMPLE_GAIN * (event.gain ?? 1);
-        const existingVoice = this.stretchedSampleVoicesByEventId.get(event.id);
+    for (const event of stretchedEvents) {
+      const audioBuffer = this.sampleCache.get(event.sampleId);
 
-        this.setStretchedSampleDebug(event, {
-          status: "preparing",
-        });
-
-        if (
-          existingVoice &&
-          existingVoice.sampleId === event.sampleId &&
-          existingVoice.trackId === event.trackId &&
-          existingVoice.gainValue === gainValue
-        ) {
-          startDelaySeconds = Math.max(
-            startDelaySeconds,
-            existingVoice.latencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
-          );
-          return;
-        }
-
-        if (existingVoice) {
-          this.stopAndDisconnectStretchedSampleVoice(existingVoice);
-          this.stretchedSampleVoicesByEventId.delete(event.id);
-        }
-
-        const audioContext = this.getOrCreateAudioContext();
-        const audioBuffer = this.sampleCache.get(event.sampleId);
-
-        if (!audioBuffer) {
-          throw new Error(
-            `Sample "${event.sampleId}" must be loaded before stretch scheduling.`,
-          );
-        }
-
-        const stretchNode = await SignalsmithStretch(audioContext, {
-          numberOfInputs: 0,
-          numberOfOutputs: 1,
-          outputChannelCount: [2],
-        });
-        const gainNode = audioContext.createGain();
-
-        await stretchNode.configure({ preset: "default" });
-        await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
-        await stretchNode.setUpdateInterval(0.1, (inputTimeSeconds) => {
-          this.setStretchedSampleDebug(event, {
-            inputTimeSeconds,
-            status: "scheduled",
-          });
-        });
-        const latencySeconds = await stretchNode.latency();
-        gainNode.gain.value = 0;
-        stretchNode.connect(gainNode);
-        this.connectSourceGain(gainNode, event.trackId);
-
-        const voice = {
-          eventId: event.id,
-          gainNode,
-          gainValue,
-          latencySeconds,
-          sampleId: event.sampleId,
-          stretchNode,
-          trackId: event.trackId,
-        };
-
-        this.activeStretchedSampleVoices.add(voice);
-        this.stretchedSampleVoicesByEventId.set(event.id, voice);
-        this.setStretchedSampleDebug(event, {
-          inputTimeSeconds: stretchNode.inputTime,
-          latencySeconds,
-          status: "prepared",
-        });
-        startDelaySeconds = Math.max(
-          startDelaySeconds,
-          latencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
+      if (!audioBuffer) {
+        throw new Error(
+          `Sample "${event.sampleId}" must be loaded before stretch scheduling.`,
         );
-      }),
-    );
+      }
+
+      this.setStretchedSampleDebug(event, {
+        inputTimeSeconds: 0,
+        status: "prepared",
+      });
+      startDelaySeconds = Math.max(
+        startDelaySeconds,
+        STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS,
+      );
+    }
 
     return startDelaySeconds;
   }
@@ -591,82 +533,148 @@ export class BrowserAudioEngine implements AudioEngine {
     });
   }
 
-  private scheduleStretchedSample(
+  private async scheduleStretchedSample(
     event: SampleLoopEvent,
     {
       tempoBpm,
       when,
+      scheduleToken,
     }: {
+      scheduleToken: number;
       tempoBpm: number;
       when: number;
     },
-  ): void {
-    const voice = this.stretchedSampleVoicesByEventId.get(event.id);
+  ): Promise<void> {
     const audioContext = this.getOrCreateAudioContext();
     const audioBuffer = this.sampleCache.get(event.sampleId);
 
-    if (!voice || !audioBuffer) {
-      throw new Error(`Imported audio event "${event.id}" is not ready.`);
-    }
-
-    const startTime = Math.max(when, audioContext.currentTime);
-    const sourceOffsetSeconds = Math.max(event.sourceOffsetSeconds ?? 0, 0);
-
-    if (sourceOffsetSeconds >= audioBuffer.duration) {
-      return;
+    if (!audioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before scheduling.`);
     }
 
     const stretchRate = event.stretchRate ?? 1;
+    const requestedStartTime = when;
+    const stretchNode = await SignalsmithStretch(audioContext, {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+    });
+    const gainNode = audioContext.createGain();
+
+    this.setStretchedSampleDebug(event, {
+      currentAudioTime: audioContext.currentTime,
+      inputTimeSeconds: 0,
+      scheduledStartTime: requestedStartTime,
+      status: "preparing",
+      stretchRate,
+    });
+
+    await stretchNode.configure({ preset: "default" });
+    await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
+    await stretchNode.setUpdateInterval(0.1, (inputTimeSeconds) => {
+      this.setStretchedSampleDebug(event, {
+        currentAudioTime: this.audioContext?.currentTime,
+        inputTimeSeconds,
+        status: "scheduled",
+      });
+    });
+    const latencySeconds = await stretchNode.latency();
+
+    if (scheduleToken !== this.sampleLoopUpdateToken) {
+      void stretchNode.dropBuffers();
+      disconnectAudioNode(stretchNode);
+      return;
+    }
+
+    const lateBySeconds = Math.max(0, audioContext.currentTime - requestedStartTime);
+    const startTime =
+      lateBySeconds > 0
+        ? audioContext.currentTime + STRETCHED_SAMPLE_START_PADDING_SECONDS
+        : requestedStartTime;
+    const sourceOffsetSeconds = Math.max(
+      (event.sourceOffsetSeconds ?? 0) + lateBySeconds * stretchRate,
+      0,
+    );
+
+    if (sourceOffsetSeconds >= audioBuffer.duration) {
+      void stretchNode.dropBuffers();
+      disconnectAudioNode(stretchNode);
+      return;
+    }
+
     const playbackDurationSeconds =
       event.playbackDurationSeconds ??
       (typeof event.durationTicks === "number"
         ? ticksToSeconds(event.durationTicks, { tempoBpm })
         : (audioBuffer.duration - sourceOffsetSeconds) / stretchRate);
+    const adjustedPlaybackDurationSeconds = Math.max(
+      0.01,
+      playbackDurationSeconds - lateBySeconds,
+    );
     const remainingOutputSeconds =
       (audioBuffer.duration - sourceOffsetSeconds) / stretchRate;
     const stopTime =
-      startTime + Math.max(0.01, Math.min(playbackDurationSeconds, remainingOutputSeconds));
+      startTime +
+      Math.max(
+        0.01,
+        Math.min(adjustedPlaybackDurationSeconds, remainingOutputSeconds),
+      );
     const releaseStartTime = Math.max(
       startTime,
       stopTime - STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS,
     );
 
-    voice.gainNode.gain.cancelScheduledValues(startTime);
-    voice.gainNode.gain.setValueAtTime(voice.gainValue, startTime);
-    voice.gainNode.gain.setValueAtTime(voice.gainValue, releaseStartTime);
-    voice.gainNode.gain.linearRampToValueAtTime(0, stopTime);
+    gainNode.gain.value = 0;
+    gainNode.gain.cancelScheduledValues(startTime);
+    gainNode.gain.setValueAtTime(DEFAULT_SAMPLE_GAIN * (event.gain ?? 1), startTime);
+    gainNode.gain.setValueAtTime(
+      DEFAULT_SAMPLE_GAIN * (event.gain ?? 1),
+      releaseStartTime,
+    );
+    gainNode.gain.linearRampToValueAtTime(0, stopTime);
     this.setStretchedSampleDebug(event, {
       currentAudioTime: audioContext.currentTime,
-      inputTimeSeconds: voice.stretchNode.inputTime,
-      playbackDurationSeconds,
+      inputTimeSeconds: stretchNode.inputTime,
+      latencySeconds,
+      playbackDurationSeconds: adjustedPlaybackDurationSeconds,
       scheduledStartTime: startTime,
       scheduledStopTime: stopTime,
       status: "scheduled",
       stretchRate,
     });
-    void voice.stretchNode
-      .schedule({
-        active: true,
-        input: sourceOffsetSeconds,
-        output: startTime,
-        outputTime: startTime,
-        rate: stretchRate,
-        semitones: 0,
-      })
-      .then(() => {
-        this.setStretchedSampleDebug(event, {
-          currentAudioTime: this.audioContext?.currentTime,
-          inputTimeSeconds: voice.stretchNode.inputTime,
-          status: "scheduled",
-        });
-      })
-      .catch((error: unknown) => {
-        this.setStretchedSampleDebug(event, {
-          errorMessage:
-            error instanceof Error ? error.message : "Stretch schedule failed.",
-          status: "error",
-        });
-      });
+
+    await stretchNode.schedule({
+      active: true,
+      input: sourceOffsetSeconds,
+      output: startTime,
+      outputTime: startTime,
+      rate: stretchRate,
+      semitones: 0,
+    });
+
+    if (scheduleToken !== this.sampleLoopUpdateToken) {
+      void stretchNode.stop(audioContext.currentTime);
+      void stretchNode.dropBuffers();
+      disconnectAudioNode(stretchNode);
+      disconnectAudioNode(gainNode);
+      return;
+    }
+
+    stretchNode.connect(gainNode);
+    this.connectSourceGain(gainNode, event.trackId);
+
+    const voice: ActiveStretchedSampleVoice = {
+      eventId: event.id,
+      gainNode,
+      sampleId: event.sampleId,
+      stretchNode,
+    };
+
+    voice.cleanupTimerId = globalThis.setTimeout(
+      () => this.stopAndDisconnectStretchedSampleVoice(voice),
+      Math.max(0, Math.ceil((stopTime - audioContext.currentTime + 0.1) * 1000)),
+    );
+    this.activeStretchedSampleVoices.add(voice);
   }
 
   private scheduleLoadedSample(
@@ -1044,14 +1052,28 @@ export class BrowserAudioEngine implements AudioEngine {
       );
       this.stopAndDisconnectStretchedSampleVoice(sampleVoice, currentTime);
     }
-
-    this.stretchedSampleVoicesByEventId.clear();
   }
 
   private stopAndDisconnectStretchedSampleVoice(
     sampleVoice: ActiveStretchedSampleVoice,
     when = this.audioContext?.currentTime ?? 0,
   ): void {
+    if (sampleVoice.cleanupTimerId) {
+      globalThis.clearTimeout(sampleVoice.cleanupTimerId);
+      sampleVoice.cleanupTimerId = undefined;
+    }
+
+    this.setStretchedSampleDebug(
+      {
+        id: sampleVoice.eventId,
+        sampleId: sampleVoice.sampleId,
+      },
+      {
+        currentAudioTime: when,
+        inputTimeSeconds: sampleVoice.stretchNode.inputTime,
+        status: "stopped",
+      },
+    );
     void sampleVoice.stretchNode.stop(when);
     void sampleVoice.stretchNode.dropBuffers();
     this.activeStretchedSampleVoices.delete(sampleVoice);
