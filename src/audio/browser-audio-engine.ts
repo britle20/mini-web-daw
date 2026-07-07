@@ -47,6 +47,7 @@ const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 0.25;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
+const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 
 type AudioContextConstructor = new () => AudioContext;
 
@@ -522,7 +523,7 @@ export class BrowserAudioEngine implements AudioEngine {
         await stretchNode.configure({ preset: "default" });
         await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
         const latencySeconds = await stretchNode.latency();
-        gainNode.gain.value = gainValue;
+        gainNode.gain.value = 0;
         stretchNode.connect(gainNode);
         this.connectSourceGain(gainNode, event.trackId);
 
@@ -582,19 +583,21 @@ export class BrowserAudioEngine implements AudioEngine {
       (audioBuffer.duration - sourceOffsetSeconds) / stretchRate;
     const stopTime =
       startTime + Math.max(0.01, Math.min(playbackDurationSeconds, remainingOutputSeconds));
+    const releaseStartTime = Math.max(
+      startTime,
+      stopTime - STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS,
+    );
 
+    voice.gainNode.gain.cancelScheduledValues(startTime);
+    voice.gainNode.gain.setValueAtTime(voice.gainValue, startTime);
+    voice.gainNode.gain.setValueAtTime(voice.gainValue, releaseStartTime);
+    voice.gainNode.gain.linearRampToValueAtTime(0, stopTime);
     void voice.stretchNode.schedule({
       active: true,
       input: sourceOffsetSeconds,
       output: startTime,
-      outputTime: startTime,
       rate: stretchRate,
       semitones: 0,
-    });
-    void voice.stretchNode.schedule({
-      active: false,
-      output: stopTime,
-      outputTime: stopTime,
     });
   }
 
