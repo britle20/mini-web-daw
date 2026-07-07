@@ -643,23 +643,6 @@ export class BrowserAudioEngine implements AudioEngine {
       stretchRate,
     });
 
-    await stretchNode.schedule({
-      active: true,
-      input: sourceOffsetSeconds,
-      output: startTime,
-      outputTime: startTime,
-      rate: stretchRate,
-      semitones: 0,
-    });
-
-    if (scheduleToken !== this.sampleLoopUpdateToken) {
-      void stretchNode.stop(audioContext.currentTime);
-      void stretchNode.dropBuffers();
-      disconnectAudioNode(stretchNode);
-      disconnectAudioNode(gainNode);
-      return;
-    }
-
     stretchNode.connect(gainNode);
     this.connectSourceGain(gainNode, event.trackId);
 
@@ -670,11 +653,31 @@ export class BrowserAudioEngine implements AudioEngine {
       stretchNode,
     };
 
+    this.activeStretchedSampleVoices.add(voice);
+
+    try {
+      await stretchNode.schedule({
+        active: true,
+        input: sourceOffsetSeconds,
+        output: startTime,
+        outputTime: startTime,
+        rate: stretchRate,
+        semitones: 0,
+      });
+    } catch (error) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
+      throw error;
+    }
+
+    if (scheduleToken !== this.sampleLoopUpdateToken) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
+      return;
+    }
+
     voice.cleanupTimerId = globalThis.setTimeout(
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
       Math.max(0, Math.ceil((stopTime - audioContext.currentTime + 0.1) * 1000)),
     );
-    this.activeStretchedSampleVoices.add(voice);
   }
 
   private scheduleLoadedSample(
