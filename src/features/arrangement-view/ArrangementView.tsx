@@ -113,8 +113,9 @@ export function ArrangementView({
   const latestStretchDebugSnapshot = getLatestStretchDebugSnapshot(
     stretchDebugSnapshots,
   );
-  const activeStretchDebugSnapshotCount = stretchDebugSnapshots.filter(
-    (snapshot) => snapshot.status !== "stopped",
+  const liveStretchNodeCount = stretchDebugSnapshots.filter(
+    (snapshot) =>
+      snapshot.status === "preparing" || snapshot.status === "scheduled",
   ).length;
   const barNumbers = Array.from(
     { length: arrangementLengthBars },
@@ -255,7 +256,7 @@ export function ArrangementView({
         <div className={styles.toolbarControls}>
           {latestStretchDebugSnapshot ? (
             <StretchDebugBadge
-              activeCount={activeStretchDebugSnapshotCount}
+              liveNodeCount={liveStretchNodeCount}
               snapshot={latestStretchDebugSnapshot}
               totalCount={stretchDebugSnapshots.length}
             />
@@ -507,11 +508,11 @@ function ClipContent({ kind }: { kind: "audio" | "midi" }) {
 }
 
 function StretchDebugBadge({
-  activeCount,
+  liveNodeCount,
   snapshot,
   totalCount,
 }: {
-  activeCount: number;
+  liveNodeCount: number;
   snapshot: StretchedSampleDebugSnapshot;
   totalCount: number;
 }) {
@@ -528,7 +529,7 @@ function StretchDebugBadge({
       <code>
         {snapshot.status} rate {formatDebugRate(snapshot.stretchRate)} input{" "}
         {formatDebugSeconds(snapshot.inputTimeSeconds)} lat{" "}
-        {formatDebugSeconds(snapshot.latencySeconds)} active {activeCount}/
+        {formatDebugSeconds(snapshot.latencySeconds)} nodes {liveNodeCount}/
         {totalCount}
       </code>
     </div>
@@ -539,7 +540,7 @@ function getLatestStretchDebugSnapshot(
   snapshots: readonly StretchedSampleDebugSnapshot[],
 ): StretchedSampleDebugSnapshot | null {
   const activeSnapshots = snapshots.filter(
-    (snapshot) => snapshot.status !== "stopped",
+    (snapshot) => snapshot.status !== "stopped" && snapshot.status !== "queued",
   );
   const snapshotsToCompare =
     activeSnapshots.length > 0 ? activeSnapshots : snapshots;

@@ -79,6 +79,14 @@ interface ActiveStretchedSampleVoice {
   stretchNode: SignalsmithStretchNode;
 }
 
+interface PendingStretchedSampleSchedule {
+  event: SampleLoopEvent;
+  scheduleToken: number;
+  tempoBpm: number;
+  timerId: ReturnType<typeof globalThis.setTimeout>;
+  when: number;
+}
+
 interface MixerRoute {
   analyserNode: AnalyserNode;
   effectNodes: AudioNode[];
@@ -105,6 +113,8 @@ export class BrowserAudioEngine implements AudioEngine {
   private readonly activeSampleVoices = new Set<ActiveSamplePreview>();
   private readonly activeStretchedSampleVoices =
     new Set<ActiveStretchedSampleVoice>();
+  private readonly pendingStretchedSampleSchedules =
+    new Set<PendingStretchedSampleSchedule>();
   private readonly stretchedSampleDebugByEventId = new Map<
     string,
     StretchedSampleDebugSnapshot
@@ -388,6 +398,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
   pauseLoop(): TransportSnapshot {
     this.sampleLoopUpdateToken += 1;
+    this.clearPendingStretchedSampleSchedules();
     this.stopActiveSampleVoices();
     this.stopActiveStretchedSampleVoices();
     this.stopActiveNoteVoices();
@@ -401,6 +412,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
   stopLoop(): TransportSnapshot {
     this.sampleLoopUpdateToken += 1;
+    this.clearPendingStretchedSampleSchedules();
     this.stopActiveSampleVoices();
     this.stopActiveStretchedSampleVoices();
     this.stopActiveNoteVoices();
@@ -448,6 +460,7 @@ export class BrowserAudioEngine implements AudioEngine {
     }
 
     const updateToken = (this.sampleLoopUpdateToken += 1);
+    this.clearPendingStretchedSampleSchedules();
 
     await Promise.all([
       this.loadSamplesForLoopEvents(sampleEvents),
@@ -560,6 +573,18 @@ export class BrowserAudioEngine implements AudioEngine {
 
     const stretchRate = event.stretchRate ?? 1;
     const requestedStartTime = when;
+    const secondsUntilStart = requestedStartTime - audioContext.currentTime;
+
+    if (secondsUntilStart > STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS) {
+      this.deferStretchedSampleSchedule(event, {
+        delaySeconds: secondsUntilStart - STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS,
+        scheduleToken,
+        tempoBpm,
+        when,
+      });
+      return;
+    }
+
     const stretchNode = await SignalsmithStretch(audioContext, {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -686,6 +711,73 @@ export class BrowserAudioEngine implements AudioEngine {
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
       Math.max(0, Math.ceil((stopTime - audioContext.currentTime + 0.1) * 1000)),
     );
+  }
+
+  private deferStretchedSampleSchedule(
+    event: SampleLoopEvent,
+    {
+      delaySeconds,
+      scheduleToken,
+      tempoBpm,
+      when,
+    }: {
+      delaySeconds: number;
+      scheduleToken: number;
+      tempoBpm: number;
+      when: number;
+    },
+  ): void {
+    const pendingSchedule: PendingStretchedSampleSchedule = {
+      event,
+      scheduleToken,
+      tempoBpm,
+      timerId: globalThis.setTimeout(() => {
+        this.pendingStretchedSampleSchedules.delete(pendingSchedule);
+
+        if (scheduleToken !== this.sampleLoopUpdateToken) {
+          return;
+        }
+
+        void this.scheduleStretchedSample(event, {
+          scheduleToken,
+          tempoBpm,
+          when,
+        }).catch((error: unknown) => {
+          this.setStretchedSampleDebug(event, {
+            errorMessage:
+              error instanceof Error
+                ? error.message
+                : "Deferred stretch scheduling failed.",
+            status: "error",
+          });
+        });
+      }, Math.max(0, Math.ceil(delaySeconds * 1000))),
+      when,
+    };
+
+    this.pendingStretchedSampleSchedules.add(pendingSchedule);
+    this.setStretchedSampleDebug(event, {
+      currentAudioTime: this.audioContext?.currentTime,
+      inputTimeSeconds: 0,
+      scheduledStartTime: when,
+      status: "queued",
+      stretchRate: event.stretchRate,
+    });
+  }
+
+  private clearPendingStretchedSampleSchedules(): void {
+    const currentTime = this.audioContext?.currentTime ?? 0;
+
+    for (const pendingSchedule of this.pendingStretchedSampleSchedules) {
+      globalThis.clearTimeout(pendingSchedule.timerId);
+      this.setStretchedSampleDebug(pendingSchedule.event, {
+        currentAudioTime: currentTime,
+        inputTimeSeconds: 0,
+        status: "stopped",
+      });
+    }
+
+    this.pendingStretchedSampleSchedules.clear();
   }
 
   private getStretchChannelBuffers(

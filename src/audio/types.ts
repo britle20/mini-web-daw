@@ -48,6 +48,7 @@ export type StretchedSampleDebugStatus =
   | "error"
   | "prepared"
   | "preparing"
+  | "queued"
   | "scheduled"
   | "stopped";
 
