@@ -48,7 +48,7 @@ const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
 const STRETCHED_SAMPLE_NODE_SETUP_LEAD_SECONDS = 0.35;
-const STRETCHED_SAMPLE_ACTIVATION_LEAD_SECONDS = 0.03;
+const STRETCHED_SAMPLE_ACTIVATION_LEAD_SECONDS = 0;
 const STRETCHED_SAMPLE_INITIAL_START_DELAY_SECONDS = 0.5;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_CLEANUP_PADDING_SECONDS = 0.15;
@@ -720,8 +720,10 @@ export class BrowserAudioEngine implements AudioEngine {
       }
 
       const activationTime = audioContext.currentTime;
-      const activationInputSeconds =
-        sourceOffsetSeconds - (startTime - activationTime) * stretchRate;
+      const activationInputSeconds = Math.max(
+        sourceOffsetSeconds + Math.max(0, activationTime - startTime) * stretchRate,
+        0,
+      );
 
       if (activationInputSeconds >= audioBuffer.duration) {
         this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
