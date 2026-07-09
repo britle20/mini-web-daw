@@ -1223,19 +1223,11 @@ export class BrowserAudioEngine implements AudioEngine {
     const currentTime = this.audioContext?.currentTime ?? 0;
 
     for (const sampleVoice of this.activeStretchedSampleVoices) {
-      if (sampleVoice.currentEvent) {
-        this.setStretchedSampleDebug(sampleVoice.currentEvent, {
-          currentAudioTime: currentTime,
-          inputTimeSeconds: sampleVoice.stretchNode.inputTime,
-          status: "stopped",
-        });
-      }
-
-      this.stopAndDisconnectStretchedSampleVoice(sampleVoice, currentTime);
+      this.silenceStretchedSampleVoice(sampleVoice, currentTime);
     }
   }
 
-  private stopAndDisconnectStretchedSampleVoice(
+  private silenceStretchedSampleVoice(
     sampleVoice: ActiveStretchedSampleVoice,
     when = this.audioContext?.currentTime ?? 0,
   ): void {
@@ -1243,6 +1235,9 @@ export class BrowserAudioEngine implements AudioEngine {
       globalThis.clearTimeout(sampleVoice.cleanupTimerId);
       sampleVoice.cleanupTimerId = undefined;
     }
+
+    sampleVoice.gainNode.gain.cancelScheduledValues(when);
+    sampleVoice.gainNode.gain.setValueAtTime(0, when);
 
     if (sampleVoice.currentEvent) {
       this.setStretchedSampleDebug(sampleVoice.currentEvent, {
@@ -1254,6 +1249,13 @@ export class BrowserAudioEngine implements AudioEngine {
     }
 
     void sampleVoice.stretchNode.stop(when);
+  }
+
+  private stopAndDisconnectStretchedSampleVoice(
+    sampleVoice: ActiveStretchedSampleVoice,
+    when = this.audioContext?.currentTime ?? 0,
+  ): void {
+    this.silenceStretchedSampleVoice(sampleVoice, when);
     void sampleVoice.stretchNode.dropBuffers();
     this.activeStretchedSampleVoices.delete(sampleVoice);
     this.stretchedSampleVoicesByRouteKey.delete(sampleVoice.routeKey);
