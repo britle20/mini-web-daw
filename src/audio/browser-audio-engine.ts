@@ -697,6 +697,11 @@ export class BrowserAudioEngine implements AudioEngine {
         rate: stretchRate,
         semitones: 0,
       });
+      await stretchNode.schedule({
+        active: false,
+        output: stopTime,
+        outputTime: stopTime,
+      });
     } catch (error) {
       this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       throw error;
