@@ -47,7 +47,7 @@ const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
-const STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS = 0.5;
+const STRETCHED_SAMPLE_NODE_SETUP_DELAY_SECONDS = 0;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
@@ -585,6 +585,11 @@ export class BrowserAudioEngine implements AudioEngine {
       return;
     }
 
+    this.stopActiveStretchedSampleVoicesForSample(
+      event.sampleId,
+      audioContext.currentTime,
+    );
+
     const stretchNode = await SignalsmithStretch(audioContext, {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -697,11 +702,6 @@ export class BrowserAudioEngine implements AudioEngine {
         rate: stretchRate,
         semitones: 0,
       });
-      await stretchNode.schedule({
-        active: false,
-        output: stopTime,
-        outputTime: stopTime,
-      });
     } catch (error) {
       this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       throw error;
@@ -714,7 +714,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
     voice.cleanupTimerId = globalThis.setTimeout(
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
-      Math.max(0, Math.ceil((stopTime - audioContext.currentTime + 0.1) * 1000)),
+      Math.max(0, Math.ceil((stopTime - audioContext.currentTime) * 1000)),
     );
   }
 
@@ -1175,6 +1175,19 @@ export class BrowserAudioEngine implements AudioEngine {
         },
       );
       this.stopAndDisconnectStretchedSampleVoice(sampleVoice, currentTime);
+    }
+  }
+
+  private stopActiveStretchedSampleVoicesForSample(
+    sampleId: SampleId,
+    when = this.audioContext?.currentTime ?? 0,
+  ): void {
+    for (const sampleVoice of this.activeStretchedSampleVoices) {
+      if (sampleVoice.sampleId !== sampleId) {
+        continue;
+      }
+
+      this.stopAndDisconnectStretchedSampleVoice(sampleVoice, when);
     }
   }
 
