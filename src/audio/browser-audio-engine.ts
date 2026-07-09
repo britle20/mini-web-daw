@@ -596,9 +596,6 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     gainNode.gain.value = 0;
-    stretchNode.connect(gainNode);
-    this.connectSourceGain(gainNode, event.trackId);
-    this.activeStretchedSampleVoices.add(voice);
     return { latencySeconds, voice };
   }
 
@@ -726,6 +723,10 @@ export class BrowserAudioEngine implements AudioEngine {
       this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       return;
     }
+
+    voice.stretchNode.connect(voice.gainNode);
+    this.connectSourceGain(voice.gainNode, event.trackId);
+    this.activeStretchedSampleVoices.add(voice);
 
     voice.cleanupTimerId = globalThis.setTimeout(
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
