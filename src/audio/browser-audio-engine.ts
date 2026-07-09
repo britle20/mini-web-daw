@@ -50,6 +50,7 @@ const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
 const STRETCHED_SAMPLE_NODE_SETUP_LEAD_SECONDS = 0.35;
 const STRETCHED_SAMPLE_INITIAL_START_DELAY_SECONDS = 0.5;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
+const STRETCHED_SAMPLE_CLEANUP_PADDING_SECONDS = 0.15;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
 
@@ -705,12 +706,16 @@ export class BrowserAudioEngine implements AudioEngine {
       stretchRate,
     });
 
+    const activationTime = audioContext.currentTime;
+    const activationInputSeconds =
+      sourceOffsetSeconds - (startTime - activationTime) * stretchRate;
+
     try {
       await voice.stretchNode.schedule({
         active: true,
-        input: sourceOffsetSeconds,
-        output: startTime,
-        outputTime: startTime,
+        input: activationInputSeconds,
+        output: activationTime,
+        outputTime: activationTime,
         rate: stretchRate,
         semitones: 0,
       });
@@ -730,7 +735,16 @@ export class BrowserAudioEngine implements AudioEngine {
 
     voice.cleanupTimerId = globalThis.setTimeout(
       () => this.stopAndDisconnectStretchedSampleVoice(voice),
-      Math.max(0, Math.ceil((stopTime - audioContext.currentTime) * 1000)),
+      Math.max(
+        0,
+        Math.ceil(
+          (stopTime -
+            audioContext.currentTime +
+            latencySeconds +
+            STRETCHED_SAMPLE_CLEANUP_PADDING_SECONDS) *
+            1000,
+        ),
+      ),
     );
   }
 
