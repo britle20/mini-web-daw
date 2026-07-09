@@ -730,6 +730,9 @@ export class BrowserAudioEngine implements AudioEngine {
         return;
       }
 
+      voice.stretchNode.connect(voice.gainNode);
+      this.connectSourceGain(voice.gainNode, event.trackId);
+
       try {
         await voice.stretchNode.schedule({
           active: true,
@@ -751,9 +754,6 @@ export class BrowserAudioEngine implements AudioEngine {
         this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
         return;
       }
-
-      voice.stretchNode.connect(voice.gainNode);
-      this.connectSourceGain(voice.gainNode, event.trackId);
 
       voice.cleanupTimerId = globalThis.setTimeout(
         () => this.stopAndDisconnectStretchedSampleVoice(voice),
