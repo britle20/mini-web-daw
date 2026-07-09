@@ -47,7 +47,8 @@ const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
 const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
-const STRETCHED_SAMPLE_SCHEDULE_PADDING_SECONDS = 0.05;
+const STRETCHED_SAMPLE_NODE_SETUP_LEAD_SECONDS = 0.35;
+const STRETCHED_SAMPLE_INITIAL_START_DELAY_SECONDS = 0.5;
 const STRETCHED_SAMPLE_START_PADDING_SECONDS = 0.03;
 const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
 const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
@@ -73,10 +74,8 @@ interface ActiveSamplePreview {
 
 interface ActiveStretchedSampleVoice {
   cleanupTimerId?: ReturnType<typeof globalThis.setTimeout>;
-  currentEvent: Pick<SampleLoopEvent, "id" | "sampleId" | "stretchRate"> | null;
+  eventId: string;
   gainNode: GainNode;
-  latencySeconds: number;
-  routeKey: string;
   sampleId: SampleId;
   stretchNode: SignalsmithStretchNode;
 }
@@ -117,10 +116,6 @@ export class BrowserAudioEngine implements AudioEngine {
     new Set<ActiveStretchedSampleVoice>();
   private readonly pendingStretchedSampleSchedules =
     new Set<PendingStretchedSampleSchedule>();
-  private readonly stretchedSampleVoicesByRouteKey = new Map<
-    string,
-    ActiveStretchedSampleVoice
-  >();
   private readonly stretchedSampleDebugByEventId = new Map<
     string,
     StretchedSampleDebugSnapshot
@@ -344,9 +339,7 @@ export class BrowserAudioEngine implements AudioEngine {
 
     this.stopLoop();
     const stretchedSampleStartDelaySeconds =
-      await this.prepareStretchedSampleVoices(sampleEvents, {
-        recreateExisting: true,
-      });
+      await this.prepareStretchedSampleVoices(sampleEvents);
 
     const audioContext = this.getOrCreateAudioContext();
     const normalizedScheduleAheadTime = hasStretchedSampleEvents(sampleEvents)
@@ -507,23 +500,13 @@ export class BrowserAudioEngine implements AudioEngine {
 
   private async prepareStretchedSampleVoices(
     events: readonly SampleLoopEvent[],
-    { recreateExisting = false }: { recreateExisting?: boolean } = {},
   ): Promise<number> {
     const stretchedEvents = events.filter(isStretchedSampleEvent);
     const stretchedEventIds = new Set(stretchedEvents.map((event) => event.id));
-    const stretchedRouteKeys = new Set(
-      stretchedEvents.map((event) => getStretchedSampleRouteKey(event)),
-    );
 
     for (const snapshot of this.stretchedSampleDebugByEventId.values()) {
       if (!stretchedEventIds.has(snapshot.eventId)) {
         this.stretchedSampleDebugByEventId.delete(snapshot.eventId);
-      }
-    }
-
-    for (const [routeKey, voice] of this.stretchedSampleVoicesByRouteKey) {
-      if (recreateExisting || !stretchedRouteKeys.has(routeKey)) {
-        this.stopAndDisconnectStretchedSampleVoice(voice);
       }
     }
 
@@ -542,39 +525,9 @@ export class BrowserAudioEngine implements AudioEngine {
       });
     }
 
-    if (stretchedRouteKeys.size === 0) {
-      return 0;
-    }
-
-    const preparedVoices = await Promise.all(
-      Array.from(stretchedRouteKeys, async (routeKey) => {
-        const existingVoice = this.stretchedSampleVoicesByRouteKey.get(routeKey);
-
-        if (existingVoice) {
-          return existingVoice;
-        }
-
-        const event = stretchedEvents.find(
-          (candidate) => getStretchedSampleRouteKey(candidate) === routeKey,
-        );
-
-        if (!event) {
-          return null;
-        }
-
-        return this.createStretchedSampleVoice(event, routeKey);
-      }),
-    );
-
-    const maxLatencySeconds = Math.max(
-      0,
-      ...preparedVoices.map((voice) => voice?.latencySeconds ?? 0),
-    );
-
-    return Math.max(
-      STRETCHED_SAMPLE_SCHEDULE_PADDING_SECONDS,
-      maxLatencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
-    );
+    return stretchedEvents.length > 0
+      ? STRETCHED_SAMPLE_INITIAL_START_DELAY_SECONDS
+      : 0;
   }
 
   private setStretchedSampleDebug(
@@ -599,8 +552,10 @@ export class BrowserAudioEngine implements AudioEngine {
 
   private async createStretchedSampleVoice(
     event: SampleLoopEvent,
-    routeKey: string,
-  ): Promise<ActiveStretchedSampleVoice> {
+  ): Promise<{
+    latencySeconds: number;
+    voice: ActiveStretchedSampleVoice;
+  }> {
     const audioContext = this.getOrCreateAudioContext();
     const audioBuffer = this.sampleCache.get(event.sampleId);
 
@@ -622,24 +577,18 @@ export class BrowserAudioEngine implements AudioEngine {
     const latencySeconds = await stretchNode.latency();
 
     const voice: ActiveStretchedSampleVoice = {
-      currentEvent: null,
+      eventId: event.id,
       gainNode,
-      latencySeconds,
-      routeKey,
       sampleId: event.sampleId,
       stretchNode,
     };
 
     await stretchNode.setUpdateInterval(0.1, (inputTimeSeconds) => {
-      if (
-        !voice.currentEvent ||
-        !this.activeStretchedSampleVoices.has(voice) ||
-        this.stretchedSampleVoicesByRouteKey.get(routeKey) !== voice
-      ) {
+      if (!this.activeStretchedSampleVoices.has(voice)) {
         return;
       }
 
-      this.setStretchedSampleDebug(voice.currentEvent, {
+      this.setStretchedSampleDebug(event, {
         currentAudioTime: this.audioContext?.currentTime,
         inputTimeSeconds,
         status: "scheduled",
@@ -650,8 +599,7 @@ export class BrowserAudioEngine implements AudioEngine {
     stretchNode.connect(gainNode);
     this.connectSourceGain(gainNode, event.trackId);
     this.activeStretchedSampleVoices.add(voice);
-    this.stretchedSampleVoicesByRouteKey.set(routeKey, voice);
-    return voice;
+    return { latencySeconds, voice };
   }
 
   private async scheduleStretchedSample(
@@ -675,29 +623,11 @@ export class BrowserAudioEngine implements AudioEngine {
 
     const stretchRate = event.stretchRate ?? 1;
     const requestedStartTime = when;
-    const routeKey = getStretchedSampleRouteKey(event);
-    let voice = this.stretchedSampleVoicesByRouteKey.get(routeKey);
-
-    if (!voice) {
-      this.setStretchedSampleDebug(event, {
-        currentAudioTime: audioContext.currentTime,
-        inputTimeSeconds: 0,
-        scheduledStartTime: requestedStartTime,
-        status: "preparing",
-        stretchRate,
-      });
-      voice = await this.createStretchedSampleVoice(event, routeKey);
-    }
-
-    const scheduleLeadTimeSeconds = Math.max(
-      STRETCHED_SAMPLE_SCHEDULE_PADDING_SECONDS,
-      voice.latencySeconds + STRETCHED_SAMPLE_START_PADDING_SECONDS,
-    );
     const secondsUntilStart = requestedStartTime - audioContext.currentTime;
 
-    if (secondsUntilStart > scheduleLeadTimeSeconds) {
+    if (secondsUntilStart > STRETCHED_SAMPLE_NODE_SETUP_LEAD_SECONDS) {
       this.deferStretchedSampleSchedule(event, {
-        delaySeconds: secondsUntilStart - scheduleLeadTimeSeconds,
+        delaySeconds: secondsUntilStart - STRETCHED_SAMPLE_NODE_SETUP_LEAD_SECONDS,
         scheduleToken,
         tempoBpm,
         when,
@@ -705,7 +635,18 @@ export class BrowserAudioEngine implements AudioEngine {
       return;
     }
 
+    this.setStretchedSampleDebug(event, {
+      currentAudioTime: audioContext.currentTime,
+      inputTimeSeconds: 0,
+      scheduledStartTime: requestedStartTime,
+      status: "preparing",
+      stretchRate,
+    });
+
+    const { latencySeconds, voice } = await this.createStretchedSampleVoice(event);
+
     if (scheduleToken !== this.sampleLoopUpdateToken) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       return;
     }
 
@@ -720,6 +661,7 @@ export class BrowserAudioEngine implements AudioEngine {
     );
 
     if (sourceOffsetSeconds >= audioBuffer.duration) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       return;
     }
 
@@ -745,12 +687,6 @@ export class BrowserAudioEngine implements AudioEngine {
       stopTime - STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS,
     );
 
-    if (voice.cleanupTimerId) {
-      globalThis.clearTimeout(voice.cleanupTimerId);
-      voice.cleanupTimerId = undefined;
-    }
-
-    voice.currentEvent = event;
     voice.gainNode.gain.cancelScheduledValues(startTime);
     voice.gainNode.gain.setValueAtTime(
       DEFAULT_SAMPLE_GAIN * (event.gain ?? 1),
@@ -764,7 +700,7 @@ export class BrowserAudioEngine implements AudioEngine {
     this.setStretchedSampleDebug(event, {
       currentAudioTime: audioContext.currentTime,
       inputTimeSeconds: voice.stretchNode.inputTime,
-      latencySeconds: voice.latencySeconds,
+      latencySeconds,
       playbackDurationSeconds: adjustedPlaybackDurationSeconds,
       scheduledStartTime: startTime,
       scheduledStopTime: stopTime,
@@ -772,32 +708,27 @@ export class BrowserAudioEngine implements AudioEngine {
       stretchRate,
     });
 
-    await voice.stretchNode.schedule({
-      active: true,
-      input: sourceOffsetSeconds,
-      output: startTime,
-      outputTime: startTime,
-      rate: stretchRate,
-      semitones: 0,
-    });
+    try {
+      await voice.stretchNode.schedule({
+        active: true,
+        input: sourceOffsetSeconds,
+        output: startTime,
+        outputTime: startTime,
+        rate: stretchRate,
+        semitones: 0,
+      });
+    } catch (error) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
+      throw error;
+    }
 
     if (scheduleToken !== this.sampleLoopUpdateToken) {
+      this.stopAndDisconnectStretchedSampleVoice(voice, audioContext.currentTime);
       return;
     }
 
     voice.cleanupTimerId = globalThis.setTimeout(
-      () => {
-        if (voice.currentEvent?.id !== event.id) {
-          return;
-        }
-
-        voice.currentEvent = null;
-        this.setStretchedSampleDebug(event, {
-          currentAudioTime: this.audioContext?.currentTime,
-          inputTimeSeconds: voice.stretchNode.inputTime,
-          status: "stopped",
-        });
-      },
+      () => this.stopAndDisconnectStretchedSampleVoice(voice),
       Math.max(0, Math.ceil((stopTime - audioContext.currentTime) * 1000)),
     );
   }
@@ -1263,14 +1194,22 @@ export class BrowserAudioEngine implements AudioEngine {
     sampleVoice.gainNode.gain.cancelScheduledValues(when);
     sampleVoice.gainNode.gain.setValueAtTime(0, when);
 
-    if (sampleVoice.currentEvent) {
-      this.setStretchedSampleDebug(sampleVoice.currentEvent, {
+    const currentSnapshot = this.stretchedSampleDebugByEventId.get(
+      sampleVoice.eventId,
+    );
+
+    this.setStretchedSampleDebug(
+      {
+        id: sampleVoice.eventId,
+        sampleId: sampleVoice.sampleId,
+        stretchRate: currentSnapshot?.stretchRate,
+      },
+      {
         currentAudioTime: when,
         inputTimeSeconds: sampleVoice.stretchNode.inputTime,
         status: "stopped",
-      });
-      sampleVoice.currentEvent = null;
-    }
+      },
+    );
 
     void sampleVoice.stretchNode.stop(when);
   }
@@ -1282,7 +1221,6 @@ export class BrowserAudioEngine implements AudioEngine {
     this.silenceStretchedSampleVoice(sampleVoice, when);
     void sampleVoice.stretchNode.dropBuffers();
     this.activeStretchedSampleVoices.delete(sampleVoice);
-    this.stretchedSampleVoicesByRouteKey.delete(sampleVoice.routeKey);
     disconnectAudioNode(sampleVoice.stretchNode);
     disconnectAudioNode(sampleVoice.gainNode);
   }
@@ -1525,10 +1463,6 @@ function isRangedSampleEvent(event: SampleLoopEvent): boolean {
     typeof event.sourceOffsetSeconds === "number" ||
     typeof event.stretchRate === "number"
   );
-}
-
-function getStretchedSampleRouteKey(event: SampleLoopEvent): string {
-  return `${event.sampleId}:${event.trackId ?? "master"}`;
 }
 
 function createStretchChannelBuffers(
