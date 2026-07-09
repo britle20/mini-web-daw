@@ -33,7 +33,7 @@ declare module "signalsmith-stretch" {
   }
 
   export default function SignalsmithStretch(
-    audioContext: AudioContext,
+    audioContext: BaseAudioContext,
     channelOptions?: AudioWorkletNodeOptions,
   ): Promise<SignalsmithStretchNode>;
 }
