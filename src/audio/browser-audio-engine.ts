@@ -1247,8 +1247,6 @@ export class BrowserAudioEngine implements AudioEngine {
       });
       sampleVoice.currentEvent = null;
     }
-
-    void sampleVoice.stretchNode.stop(when);
   }
 
   private stopAndDisconnectStretchedSampleVoice(
@@ -1256,6 +1254,7 @@ export class BrowserAudioEngine implements AudioEngine {
     when = this.audioContext?.currentTime ?? 0,
   ): void {
     this.silenceStretchedSampleVoice(sampleVoice, when);
+    void sampleVoice.stretchNode.stop(when);
     void sampleVoice.stretchNode.dropBuffers();
     this.activeStretchedSampleVoices.delete(sampleVoice);
     this.stretchedSampleVoicesByRouteKey.delete(sampleVoice.routeKey);
