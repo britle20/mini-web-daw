@@ -316,8 +316,10 @@ export class BrowserAudioEngine implements AudioEngine {
     startTick,
     tempoBpm,
   }: StartClipLoopOptions): Promise<TransportSnapshot> {
+    const startToken = this.beginSampleLoopUpdate();
     const normalizedTempoBpm = clampTempoBpm(tempoBpm);
 
+    this.stopLoopPlayback();
     await this.resume();
 
     await Promise.all([
@@ -325,9 +327,16 @@ export class BrowserAudioEngine implements AudioEngine {
       this.loadSamplesForNoteLoopEvents(noteEvents),
     ]);
 
-    this.stopLoop();
+    if (!this.isCurrentSampleLoopUpdate(startToken)) {
+      return this.getTransportSnapshot();
+    }
+
     const stretchedSampleStartDelaySeconds =
       await this.prepareStretchedSampleBuffers(sampleEvents);
+
+    if (!this.isCurrentSampleLoopUpdate(startToken)) {
+      return this.getTransportSnapshot();
+    }
 
     const audioContext = this.getOrCreateAudioContext();
     const normalizedScheduleAheadTime = hasStretchedSampleEvents(sampleEvents)
@@ -350,6 +359,7 @@ export class BrowserAudioEngine implements AudioEngine {
         if (event.kind === "sample") {
           if (isStretchedSampleEvent(event)) {
             void this.scheduleStretchedSample(event, {
+              scheduleToken: this.sampleLoopUpdateToken,
               tempoBpm: scheduledTempoBpm,
               when: audioTime,
             }).catch((error: unknown) => {
@@ -385,7 +395,7 @@ export class BrowserAudioEngine implements AudioEngine {
   }
 
   pauseLoop(): TransportSnapshot {
-    this.sampleLoopUpdateToken += 1;
+    this.beginSampleLoopUpdate();
     this.stopActiveSampleVoices();
     this.stopActiveNoteVoices();
 
@@ -397,7 +407,11 @@ export class BrowserAudioEngine implements AudioEngine {
   }
 
   stopLoop(): TransportSnapshot {
-    this.sampleLoopUpdateToken += 1;
+    this.beginSampleLoopUpdate();
+    return this.stopLoopPlayback();
+  }
+
+  private stopLoopPlayback(): TransportSnapshot {
     this.stopActiveSampleVoices();
     this.stopActiveNoteVoices();
 
@@ -411,6 +425,15 @@ export class BrowserAudioEngine implements AudioEngine {
     return snapshot;
   }
 
+  private beginSampleLoopUpdate(): number {
+    this.sampleLoopUpdateToken += 1;
+    return this.sampleLoopUpdateToken;
+  }
+
+  private isCurrentSampleLoopUpdate(updateToken: number): boolean {
+    return updateToken === this.sampleLoopUpdateToken;
+  }
+
   setTempoBpm(tempoBpm: number): TransportSnapshot {
     const normalizedTempoBpm = clampTempoBpm(tempoBpm);
 
@@ -418,6 +441,14 @@ export class BrowserAudioEngine implements AudioEngine {
 
     if (!this.clipLoopScheduler) {
       return this.getTransportSnapshot();
+    }
+
+    const wasPlaying = this.clipLoopScheduler.getSnapshot().status === "playing";
+
+    if (wasPlaying) {
+      this.beginSampleLoopUpdate();
+      this.stopActiveSampleVoices();
+      this.stopActiveNoteVoices();
     }
 
     return this.clipLoopScheduler.setTempoBpm(normalizedTempoBpm);
@@ -443,19 +474,19 @@ export class BrowserAudioEngine implements AudioEngine {
       return this.getTransportSnapshot();
     }
 
-    const updateToken = (this.sampleLoopUpdateToken += 1);
+    const updateToken = this.beginSampleLoopUpdate();
     await Promise.all([
       this.loadSamplesForLoopEvents(sampleEvents),
       this.loadSamplesForNoteLoopEvents(noteEvents),
     ]);
 
-    if (updateToken !== this.sampleLoopUpdateToken || !this.clipLoopScheduler) {
+    if (!this.isCurrentSampleLoopUpdate(updateToken) || !this.clipLoopScheduler) {
       return this.getTransportSnapshot();
     }
 
     await this.prepareStretchedSampleBuffers(sampleEvents);
 
-    if (updateToken !== this.sampleLoopUpdateToken || !this.clipLoopScheduler) {
+    if (!this.isCurrentSampleLoopUpdate(updateToken) || !this.clipLoopScheduler) {
       return this.getTransportSnapshot();
     }
 
@@ -644,9 +675,11 @@ export class BrowserAudioEngine implements AudioEngine {
   private async scheduleStretchedSample(
     event: SampleLoopEvent,
     {
+      scheduleToken,
       tempoBpm,
       when,
     }: {
+      scheduleToken: number;
       tempoBpm: number;
       when: number;
     },
@@ -660,6 +693,14 @@ export class BrowserAudioEngine implements AudioEngine {
 
     const stretchRate = event.stretchRate ?? 1;
     const stretchedAudioBuffer = await this.getOrRenderStretchedSampleBuffer(event);
+
+    if (
+      !this.isCurrentSampleLoopUpdate(scheduleToken) ||
+      this.clipLoopScheduler?.getSnapshot().status !== "playing"
+    ) {
+      return;
+    }
+
     const lateBySeconds = Math.max(0, audioContext.currentTime - when);
     const startTime = Math.max(when, audioContext.currentTime);
     const sourceOffsetSeconds = Math.max(
