@@ -387,6 +387,7 @@ export function App() {
     }));
   const [playheadTick, setPlayheadTick] = useState<Tick>(0);
   const playheadTickRef = useRef<Tick>(0);
+  const arrangementPlaybackRequestRef = useRef(0);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [isAudioClipPreviewPlaying, setIsAudioClipPreviewPlaying] =
     useState(false);
@@ -757,16 +758,35 @@ export function App() {
     setPlayheadTick(nextTick);
   }
 
+  function beginArrangementPlaybackRequest(): number {
+    arrangementPlaybackRequestRef.current += 1;
+    return arrangementPlaybackRequestRef.current;
+  }
+
+  function invalidateArrangementPlaybackRequests(): void {
+    arrangementPlaybackRequestRef.current += 1;
+  }
+
+  function isCurrentArrangementPlaybackRequest(requestId: number): boolean {
+    return requestId === arrangementPlaybackRequestRef.current;
+  }
+
   function commitBpm(nextBpm: number) {
     const normalizedBpm = clampTempoBpm(nextBpm);
+    const isPlayingSong = transportState === "playing" && transportMode === "song";
+    const fallbackPlayheadTick = playheadTickRef.current;
     const snapshot = audioEngine.setTempoBpm(normalizedBpm);
+    const nextPlayheadTick =
+      isPlayingSong && snapshot.status !== "playing"
+        ? fallbackPlayheadTick
+        : snapshot.currentTick;
 
     bpmRef.current = snapshot.tempoBpm;
     setBpm(snapshot.tempoBpm);
-    commitPlayheadTick(snapshot.currentTick);
+    commitPlayheadTick(nextPlayheadTick);
 
-    if (transportState === "playing" && transportMode === "song") {
-      void restartArrangementPlayback(snapshot.currentTick);
+    if (isPlayingSong) {
+      void restartArrangementPlayback(nextPlayheadTick);
     }
   }
 
@@ -2500,6 +2520,7 @@ export function App() {
       return;
     }
 
+    invalidateArrangementPlaybackRequests();
     stopAudioClipPreview();
     setMixerLevels(createEmptyMixerLevels(arrangementTracks));
 
@@ -2517,12 +2538,22 @@ export function App() {
     startTick: Tick,
     loopRange = arrangementLoopRangeRef.current,
   ) {
+    const requestId = beginArrangementPlaybackRequest();
+
     try {
       const snapshot = await startArrangementPlayback(startTick, loopRange);
+
+      if (!isCurrentArrangementPlaybackRequest(requestId)) {
+        return;
+      }
 
       setTransportState("playing");
       commitPlayheadTick(snapshot.currentTick);
     } catch (error) {
+      if (!isCurrentArrangementPlaybackRequest(requestId)) {
+        return;
+      }
+
       setTransportState("stopped");
       commitPlayheadTick(audioEngine.stopLoop().currentTick);
       setMixerLevels(createEmptyMixerLevels(arrangementTracks));
@@ -2754,6 +2785,7 @@ export function App() {
     setAudioError(null);
 
     if (nextTransportState === "stopped") {
+      invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.stopLoop();
       setTransportState(snapshot.status);
@@ -2763,6 +2795,7 @@ export function App() {
     }
 
     if (nextTransportState === "paused") {
+      invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.pauseLoop();
       setTransportState(snapshot.status);

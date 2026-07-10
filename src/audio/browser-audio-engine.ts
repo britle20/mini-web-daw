@@ -319,7 +319,6 @@ export class BrowserAudioEngine implements AudioEngine {
     const startToken = this.beginSampleLoopUpdate();
     const normalizedTempoBpm = clampTempoBpm(tempoBpm);
 
-    this.stopLoopPlayback();
     await this.resume();
 
     await Promise.all([
@@ -338,6 +337,7 @@ export class BrowserAudioEngine implements AudioEngine {
       return this.getTransportSnapshot();
     }
 
+    this.stopLoopPlayback();
     const audioContext = this.getOrCreateAudioContext();
     const normalizedScheduleAheadTime = hasStretchedSampleEvents(sampleEvents)
       ? Math.max(
