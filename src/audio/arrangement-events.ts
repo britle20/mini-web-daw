@@ -49,6 +49,7 @@ export function expandClipInstancesForPlayback({
           durationTicks: instance.lengthTicks,
           id: `${instance.id}:audio`,
           sampleId: clip.sampleId,
+          scheduleWhenOverlappingStart: true,
           startTick: instance.startTick,
           trackId: instance.trackId,
         };

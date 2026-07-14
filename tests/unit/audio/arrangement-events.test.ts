@@ -96,6 +96,7 @@ describe("arrangement playback event expansion", () => {
         id: "audio-instance-1:audio",
         playbackDurationSeconds: 2,
         sampleId: "imported-audio-loop",
+        scheduleWhenOverlappingStart: true,
         sourceOffsetSeconds: 0.25,
         sourceBpm: 96,
         startTick: 960,

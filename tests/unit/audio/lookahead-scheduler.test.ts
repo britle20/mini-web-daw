@@ -62,6 +62,50 @@ describe("collectScheduledEventsForWindow", () => {
     ]);
   });
 
+  it("schedules a ranged event that overlaps the playback start", () => {
+    const scheduledEvents = collectScheduledEventsForWindow({
+      audioStartTime: 10,
+      events: [
+        {
+          durationTicks: 960,
+          id: "active-audio",
+          label: "active-audio",
+          scheduleWhenOverlappingStart: true,
+          startTick: 0,
+        },
+      ],
+      startTick: 480,
+      tempoBpm: 120,
+      windowEndTick: 600,
+      windowStartTick: 480,
+    });
+
+    expect(scheduledEvents).toHaveLength(1);
+    expect(scheduledEvents[0]?.absoluteTick).toBe(0);
+    expect(scheduledEvents[0]?.audioTime).toBeCloseTo(9.5);
+  });
+
+  it("does not reschedule overlapping ranged events after the playback start window", () => {
+    const scheduledEvents = collectScheduledEventsForWindow({
+      audioStartTime: 10,
+      events: [
+        {
+          durationTicks: 960,
+          id: "active-audio",
+          label: "active-audio",
+          scheduleWhenOverlappingStart: true,
+          startTick: 0,
+        },
+      ],
+      startTick: 480,
+      tempoBpm: 120,
+      windowEndTick: 840,
+      windowStartTick: 720,
+    });
+
+    expect(scheduledEvents).toHaveLength(0);
+  });
+
   it("wraps absolute ticks to loop ticks", () => {
     expect(getLoopTickAtAbsoluteTick({ absoluteTick: 0 })).toBe(0);
     expect(getLoopTickAtAbsoluteTick({ absoluteTick: 1919 })).toBe(1919);

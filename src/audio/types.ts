@@ -26,6 +26,7 @@ export interface SampleLoopEvent {
   id: string;
   playbackDurationSeconds?: number;
   sampleId: SampleId;
+  scheduleWhenOverlappingStart?: boolean;
   sourceOffsetSeconds?: number;
   sourceBpm?: number;
   startTick: Tick;
