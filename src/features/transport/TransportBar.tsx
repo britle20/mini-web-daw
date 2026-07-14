@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent,
 } from "react";
 
 import { Icon } from "../../components";
@@ -38,6 +39,8 @@ interface TransportBarProps {
   projectName: string;
   projects: readonly ProjectMenuProject[];
   transportState: TransportState;
+  onBpmAdjustmentEnd?: () => void;
+  onBpmAdjustmentStart?: () => void;
   onBpmChange: (bpm: number) => void;
   onModeChange: (mode: TransportMode) => void;
   onProjectCreate: (projectName: string) => void;
@@ -62,6 +65,8 @@ export function TransportBar({
   projectName,
   projects,
   transportState,
+  onBpmAdjustmentEnd,
+  onBpmAdjustmentStart,
   onBpmChange,
   onModeChange,
   onProjectCreate,
@@ -179,6 +184,19 @@ export function TransportBar({
     onProjectFileImport(file);
   }
 
+  function handleBpmPointerDown(event: PointerEvent<HTMLInputElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onBpmAdjustmentStart?.();
+  }
+
+  function handleBpmPointerEnd(event: PointerEvent<HTMLInputElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    onBpmAdjustmentEnd?.();
+  }
+
   return (
     <header className={styles.transportBar}>
       <div className={styles.brandGroup}>
@@ -226,6 +244,9 @@ export function TransportBar({
           max={MAX_TEMPO_BPM}
           min={MIN_TEMPO_BPM}
           onChange={(event) => onBpmChange(Number(event.target.value))}
+          onPointerCancel={handleBpmPointerEnd}
+          onPointerDown={handleBpmPointerDown}
+          onPointerUp={handleBpmPointerEnd}
           type="range"
           value={bpm}
         />

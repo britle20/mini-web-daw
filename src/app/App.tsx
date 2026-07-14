@@ -388,6 +388,8 @@ export function App() {
   const [playheadTick, setPlayheadTick] = useState<Tick>(0);
   const playheadTickRef = useRef<Tick>(0);
   const arrangementPlaybackRequestRef = useRef(0);
+  const isBpmAdjustmentActiveRef = useRef(false);
+  const shouldResumeAfterBpmAdjustmentRef = useRef(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [isAudioClipPreviewPlaying, setIsAudioClipPreviewPlaying] =
     useState(false);
@@ -773,11 +775,14 @@ export function App() {
 
   function commitBpm(nextBpm: number) {
     const normalizedBpm = clampTempoBpm(nextBpm);
-    const isPlayingSong = transportState === "playing" && transportMode === "song";
+    const shouldRestartSongPlayback =
+      !isBpmAdjustmentActiveRef.current &&
+      transportState === "playing" &&
+      transportMode === "song";
     const fallbackPlayheadTick = playheadTickRef.current;
     const snapshot = audioEngine.setTempoBpm(normalizedBpm);
     const nextPlayheadTick =
-      isPlayingSong && snapshot.status !== "playing"
+      shouldRestartSongPlayback && snapshot.status !== "playing"
         ? fallbackPlayheadTick
         : snapshot.currentTick;
 
@@ -785,9 +790,45 @@ export function App() {
     setBpm(snapshot.tempoBpm);
     commitPlayheadTick(nextPlayheadTick);
 
-    if (isPlayingSong) {
+    if (shouldRestartSongPlayback) {
       void restartArrangementPlayback(nextPlayheadTick);
     }
+  }
+
+  function handleBpmAdjustmentStart() {
+    if (isBpmAdjustmentActiveRef.current) {
+      return;
+    }
+
+    isBpmAdjustmentActiveRef.current = true;
+    shouldResumeAfterBpmAdjustmentRef.current = transportState === "playing";
+
+    if (transportState !== "playing") {
+      return;
+    }
+
+    invalidateArrangementPlaybackRequests();
+    stopAudioClipPreview();
+    const snapshot = audioEngine.pauseLoop();
+
+    setTransportState(snapshot.status);
+    commitPlayheadTick(snapshot.currentTick);
+    setMixerLevels(createEmptyMixerLevels(arrangementTracks));
+  }
+
+  function handleBpmAdjustmentEnd() {
+    if (!isBpmAdjustmentActiveRef.current) {
+      return;
+    }
+
+    isBpmAdjustmentActiveRef.current = false;
+
+    if (!shouldResumeAfterBpmAdjustmentRef.current) {
+      return;
+    }
+
+    shouldResumeAfterBpmAdjustmentRef.current = false;
+    void resumePlaybackAfterBpmAdjustment();
   }
 
   function commitClipInstances(nextClipInstances: ClipInstance[]) {
@@ -2781,10 +2822,45 @@ export function App() {
     }
   }
 
+  async function resumePlaybackAfterBpmAdjustment() {
+    const startTick = playheadTickRef.current;
+
+    setAudioError(null);
+    stopAudioClipPreview();
+
+    if (transportMode === "song") {
+      setTransportState("playing");
+      await restartArrangementPlayback(startTick);
+      return;
+    }
+
+    const clip = selectedClipRef.current;
+
+    if (!isHybridClip(clip)) {
+      await handleAudioClipPreviewPlay();
+      return;
+    }
+
+    setTransportState("playing");
+
+    try {
+      const snapshot = await startPatternPlayback(clip, startTick);
+
+      commitPlayheadTick(snapshot.currentTick);
+    } catch (error) {
+      setTransportState("stopped");
+      commitPlayheadTick(audioEngine.stopLoop().currentTick);
+      setAudioError(
+        error instanceof Error ? error.message : "Audio playback failed.",
+      );
+    }
+  }
+
   async function handleTransportStateChange(nextTransportState: TransportState) {
     setAudioError(null);
 
     if (nextTransportState === "stopped") {
+      shouldResumeAfterBpmAdjustmentRef.current = false;
       invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.stopLoop();
@@ -2795,6 +2871,7 @@ export function App() {
     }
 
     if (nextTransportState === "paused") {
+      shouldResumeAfterBpmAdjustmentRef.current = false;
       invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.pauseLoop();
@@ -2857,6 +2934,8 @@ export function App() {
         isProjectFileProcessing={isProjectFileProcessing}
         isProjectOperationPending={isProjectOperationPending}
         mode={transportMode}
+        onBpmAdjustmentEnd={handleBpmAdjustmentEnd}
+        onBpmAdjustmentStart={handleBpmAdjustmentStart}
         onBpmChange={commitBpm}
         onModeChange={handleTransportModeChange}
         onProjectCreate={handleProjectCreate}
