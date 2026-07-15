@@ -45,29 +45,6 @@ export interface NoteLoopEvent {
   trackId?: TrackId;
 }
 
-export type StretchedSampleDebugStatus =
-  | "error"
-  | "prepared"
-  | "preparing"
-  | "queued"
-  | "scheduled"
-  | "stopped";
-
-export interface StretchedSampleDebugSnapshot {
-  currentAudioTime?: number;
-  errorMessage?: string;
-  eventId: string;
-  inputTimeSeconds?: number;
-  latencySeconds?: number;
-  playbackDurationSeconds?: number;
-  sampleId: SampleId;
-  scheduledStartTime?: number;
-  scheduledStopTime?: number;
-  status: StretchedSampleDebugStatus;
-  stretchRate?: number;
-  updatedAt: number;
-}
-
 export interface StartSampleLoopOptions {
   events: readonly SampleLoopEvent[];
   loopEndTick?: Tick;
@@ -96,7 +73,6 @@ export type TransportSnapshot = SchedulerSnapshot;
 export interface AudioEngineSnapshot {
   contextState: AudioContextState | "not-created";
   loadedSampleIds: SampleId[];
-  stretchedSamples: StretchedSampleDebugSnapshot[];
   transport: TransportSnapshot;
 }
 

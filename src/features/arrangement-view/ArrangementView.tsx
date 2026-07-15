@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import { Icon } from "../../components";
-import type { MixerLevelSnapshot, StretchedSampleDebugSnapshot } from "../../audio";
+import type { MixerLevelSnapshot } from "../../audio";
 import {
   ARRANGEMENT_CLIP_DRAG_TYPE,
   ARRANGEMENT_CLIP_INSTANCE_DRAG_TYPE,
@@ -65,7 +65,6 @@ interface ArrangementViewProps {
   playheadTick: Tick;
   selectedClipInstanceId: string | null;
   shouldShowPlayhead: boolean;
-  stretchDebugSnapshots: readonly StretchedSampleDebugSnapshot[];
   trackMixerStates: readonly TrackMixerState[];
   tracks: readonly ArrangementTrack[];
 }
@@ -96,7 +95,6 @@ export function ArrangementView({
   playheadTick,
   selectedClipInstanceId,
   shouldShowPlayhead,
-  stretchDebugSnapshots,
   trackMixerStates,
   tracks,
 }: ArrangementViewProps) {
@@ -110,13 +108,6 @@ export function ArrangementView({
   const activeTrackIds = new Set(
     clipInstances.map((instance) => instance.trackId),
   );
-  const latestStretchDebugSnapshot = getLatestStretchDebugSnapshot(
-    stretchDebugSnapshots,
-  );
-  const liveStretchNodeCount = stretchDebugSnapshots.filter(
-    (snapshot) =>
-      snapshot.status === "preparing" || snapshot.status === "scheduled",
-  ).length;
   const barNumbers = Array.from(
     { length: arrangementLengthBars },
     (_, index) => index + 1,
@@ -254,13 +245,6 @@ export function ArrangementView({
           <p className={styles.eyebrow}>ARRANGEMENT</p>
         </div>
         <div className={styles.toolbarControls}>
-          {latestStretchDebugSnapshot ? (
-            <StretchDebugBadge
-              liveNodeCount={liveStretchNodeCount}
-              snapshot={latestStretchDebugSnapshot}
-              totalCount={stretchDebugSnapshots.length}
-            />
-          ) : null}
           {errorMessage ? (
             <p className={styles.errorBadge}>{errorMessage}</p>
           ) : null}
@@ -507,83 +491,6 @@ function ClipContent({ kind }: { kind: "audio" | "midi" }) {
   );
 }
 
-function StretchDebugBadge({
-  liveNodeCount,
-  snapshot,
-  totalCount,
-}: {
-  liveNodeCount: number;
-  snapshot: StretchedSampleDebugSnapshot;
-  totalCount: number;
-}) {
-  const isError = snapshot.status === "error";
-
-  return (
-    <div
-      className={`${styles.stretchDebugBadge} ${
-        isError ? styles.stretchDebugBadgeError : ""
-      }`}
-      title={createStretchDebugTitle(snapshot)}
-    >
-      <span>Stretch</span>
-      <code>
-        {snapshot.status} rate {formatDebugRate(snapshot.stretchRate)} input{" "}
-        {formatDebugSeconds(snapshot.inputTimeSeconds)} lat{" "}
-        {formatDebugSeconds(snapshot.latencySeconds)} nodes {liveNodeCount}/
-        {totalCount}
-      </code>
-    </div>
-  );
-}
-
-function getLatestStretchDebugSnapshot(
-  snapshots: readonly StretchedSampleDebugSnapshot[],
-): StretchedSampleDebugSnapshot | null {
-  const activeSnapshots = snapshots.filter(
-    (snapshot) => snapshot.status !== "stopped" && snapshot.status !== "queued",
-  );
-  const snapshotsToCompare =
-    activeSnapshots.length > 0 ? activeSnapshots : snapshots;
-
-  return snapshotsToCompare.reduce<StretchedSampleDebugSnapshot | null>(
-    (latestSnapshot, snapshot) =>
-      latestSnapshot && latestSnapshot.updatedAt > snapshot.updatedAt
-        ? latestSnapshot
-        : snapshot,
-    null,
-  );
-}
-
-function createStretchDebugTitle(
-  snapshot: StretchedSampleDebugSnapshot,
-): string {
-  const debugLines = [
-    `event: ${snapshot.eventId}`,
-    `sample: ${snapshot.sampleId}`,
-    `status: ${snapshot.status}`,
-    `rate: ${formatDebugRate(snapshot.stretchRate)}`,
-    `input: ${formatDebugSeconds(snapshot.inputTimeSeconds)}`,
-    `latency: ${formatDebugSeconds(snapshot.latencySeconds)}`,
-    `current audio: ${formatDebugSeconds(snapshot.currentAudioTime)}`,
-    `scheduled start: ${formatDebugSeconds(snapshot.scheduledStartTime)}`,
-    `scheduled stop: ${formatDebugSeconds(snapshot.scheduledStopTime)}`,
-    `duration: ${formatDebugSeconds(snapshot.playbackDurationSeconds)}`,
-  ];
-
-  if (snapshot.errorMessage) {
-    debugLines.push(`error: ${snapshot.errorMessage}`);
-  }
-
-  return debugLines.join("\n");
-}
-
-function formatDebugSeconds(value: number | undefined): string {
-  return typeof value === "number" ? `${value.toFixed(2)}s` : "-";
-}
-
-function formatDebugRate(value: number | undefined): string {
-  return typeof value === "number" ? `${value.toFixed(3)}x` : "-";
-}
 
 function getLoopRegionStyle(loopRange: ArrangementLoopRange): CSSProperties {
   return {

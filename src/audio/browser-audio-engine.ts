@@ -18,7 +18,6 @@ import type {
   SampleLoopEvent,
   StartClipLoopOptions,
   StartSampleLoopOptions,
-  StretchedSampleDebugSnapshot,
   TransportSnapshot,
 } from "./types";
 import {
@@ -104,10 +103,6 @@ export class BrowserAudioEngine implements AudioEngine {
   private readonly loadingSamples = new Map<SampleId, Promise<AudioBuffer>>();
   private readonly activeNoteVoices = new Set<ActiveNoteVoice>();
   private readonly activeSampleVoices = new Set<ActiveSamplePreview>();
-  private readonly stretchedSampleDebugByEventId = new Map<
-    string,
-    StretchedSampleDebugSnapshot
-  >();
   private activeSamplePreview: ActiveSamplePreview | null = null;
   private audioContext: AudioContext | null = null;
   private sampleLoopUpdateToken = 0;
@@ -126,7 +121,6 @@ export class BrowserAudioEngine implements AudioEngine {
     return {
       contextState: this.audioContext?.state ?? "not-created",
       loadedSampleIds: Array.from(this.sampleCache.keys()),
-      stretchedSamples: Array.from(this.stretchedSampleDebugByEventId.values()),
       transport: this.getTransportSnapshot(),
     };
   }
@@ -362,15 +356,7 @@ export class BrowserAudioEngine implements AudioEngine {
               scheduleToken: this.sampleLoopUpdateToken,
               tempoBpm: scheduledTempoBpm,
               when: audioTime,
-            }).catch((error: unknown) => {
-              this.setStretchedSampleDebug(event, {
-                errorMessage:
-                  error instanceof Error
-                    ? error.message
-                    : "Stretch scheduling failed.",
-                status: "error",
-              });
-            });
+            }).catch(() => undefined);
             return;
           }
 
@@ -514,52 +500,14 @@ export class BrowserAudioEngine implements AudioEngine {
     events: readonly SampleLoopEvent[],
   ): Promise<number> {
     const stretchedEvents = events.filter(isStretchedSampleEvent);
-    const stretchedEventIds = new Set(stretchedEvents.map((event) => event.id));
-
-    for (const snapshot of this.stretchedSampleDebugByEventId.values()) {
-      if (!stretchedEventIds.has(snapshot.eventId)) {
-        this.stretchedSampleDebugByEventId.delete(snapshot.eventId);
-      }
-    }
-
-    for (const event of stretchedEvents) {
-      this.setStretchedSampleDebug(event, {
-        inputTimeSeconds: 0,
-        status: "preparing",
-      });
-    }
 
     await Promise.all(
       stretchedEvents.map(async (event) => {
         await this.getOrRenderStretchedSampleBuffer(event);
-        this.setStretchedSampleDebug(event, {
-          inputTimeSeconds: 0,
-          status: "prepared",
-        });
       }),
     );
 
     return 0;
-  }
-
-  private setStretchedSampleDebug(
-    event: Pick<SampleLoopEvent, "id" | "sampleId" | "stretchRate">,
-    patch: Omit<
-      Partial<StretchedSampleDebugSnapshot>,
-      "eventId" | "sampleId" | "updatedAt"
-    >,
-  ): void {
-    const currentSnapshot = this.stretchedSampleDebugByEventId.get(event.id);
-
-    this.stretchedSampleDebugByEventId.set(event.id, {
-      eventId: event.id,
-      sampleId: event.sampleId,
-      status: "preparing",
-      stretchRate: event.stretchRate,
-      ...currentSnapshot,
-      ...patch,
-      updatedAt: Date.now(),
-    });
   }
 
   private async getOrRenderStretchedSampleBuffer(
@@ -769,17 +717,6 @@ export class BrowserAudioEngine implements AudioEngine {
     );
     sourceNode.start(startTime, renderedOffsetSeconds);
     sourceNode.stop(stopTime);
-
-    this.setStretchedSampleDebug(event, {
-      currentAudioTime: audioContext.currentTime,
-      inputTimeSeconds: sourceOffsetSeconds,
-      latencySeconds: 0,
-      playbackDurationSeconds: adjustedPlaybackDurationSeconds,
-      scheduledStartTime: startTime,
-      scheduledStopTime: stopTime,
-      status: "scheduled",
-      stretchRate,
-    });
   }
 
   private getStretchChannelBuffers(

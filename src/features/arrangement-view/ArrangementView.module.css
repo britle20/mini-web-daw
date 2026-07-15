@@ -51,51 +51,6 @@
   white-space: nowrap;
 }
 
-.stretchDebugBadge {
-  align-items: center;
-  background: var(--color-surface-container-lowest);
-  border: 1px solid var(--color-outline-variant);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  display: flex;
-  gap: var(--space-unit);
-  max-width: min(520px, 42vw);
-  min-height: 28px;
-  min-width: 0;
-  padding: 0 var(--space-gutter);
-}
-
-.stretchDebugBadge span {
-  color: var(--color-text-dim);
-  flex: 0 0 auto;
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--letter-spacing-label);
-  text-transform: uppercase;
-}
-
-.stretchDebugBadge code {
-  color: var(--color-primary-strong);
-  display: block;
-  font-family: var(--font-body);
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-label);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.stretchDebugBadgeError {
-  border-color: var(--color-error);
-  color: var(--color-error);
-}
-
-.stretchDebugBadgeError span,
-.stretchDebugBadgeError code {
-  color: var(--color-error);
-}
-
 .snapControl {
   align-items: center;
   background: var(--color-surface-container-lowest);

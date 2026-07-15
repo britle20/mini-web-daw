@@ -54,7 +54,5 @@ export type {
   SampleLoopEvent,
   StartClipLoopOptions,
   StartSampleLoopOptions,
-  StretchedSampleDebugSnapshot,
-  StretchedSampleDebugStatus,
   TransportSnapshot,
 } from "./types";
