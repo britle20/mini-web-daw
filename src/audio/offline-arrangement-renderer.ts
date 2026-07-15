@@ -1,4 +1,5 @@
 import { BUNDLED_SAMPLES } from "./bundled-samples";
+import SignalsmithStretch from "signalsmith-stretch";
 import { decodeAudioBuffer } from "./audio-buffer-decoder";
 import { expandClipInstancesForPlayback } from "./arrangement-events";
 import { connectMixerEffectGraph } from "./mixer-effects";
@@ -17,6 +18,8 @@ import type {
 import {
   decibelsToLinearGain,
   getArrangementLengthTicks,
+  isAudioClip,
+  isValidImportedAudioSourceBpm,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
   getTrackEffectiveGain,
@@ -25,6 +28,7 @@ import {
   type Clip,
   type ClipInstance,
   type MasterMixerState,
+  type SampleMeta,
   type SampleZone,
   type TrackMixerState,
 } from "../model";
@@ -39,6 +43,7 @@ export interface ArrangementWavExportOptions {
   clips: readonly Clip[];
   importedSampleBlobs?: ReadonlyMap<SampleId, Blob>;
   masterMixerState: MasterMixerState;
+  sampleMetas?: readonly SampleMeta[];
   sampleRate?: number;
   samples?: readonly BundledSampleMeta[];
   tempoBpm: number;
@@ -67,6 +72,7 @@ export async function renderArrangementToWav({
   clips,
   importedSampleBlobs = new Map(),
   masterMixerState,
+  sampleMetas = [],
   sampleRate = DEFAULT_EXPORT_SAMPLE_RATE,
   samples = BUNDLED_SAMPLES,
   tempoBpm,
@@ -83,9 +89,25 @@ export async function renderArrangementToWav({
     frameCount,
     sampleRate,
   });
+  const missingSourceBpmClipNames = getMissingImportedAudioSourceBpmClipNamesForExport({
+    clipInstances,
+    clips,
+    sampleMetas,
+  });
+
+  if (missingSourceBpmClipNames.length > 0) {
+    throw new Error(
+      `Source BPM is missing for imported audio clips: ${missingSourceBpmClipNames.join(
+        ", ",
+      )}. Re-import the WAV with a source BPM before exporting.`,
+    );
+  }
+
   const playbackEvents = expandClipInstancesForPlayback({
     clipInstances,
     clips,
+    projectBpm: normalizedTempoBpm,
+    sampleMetas,
   });
 
   if (playbackEvents.missingClipIds.length > 0) {
@@ -103,6 +125,10 @@ export async function renderArrangementToWav({
     sampleEvents: playbackEvents.sampleEvents,
     samples,
   });
+  const stretchedSampleBuffers = await renderStretchedSampleBuffersForOfflineRender({
+    sampleBuffers,
+    sampleEvents: playbackEvents.sampleEvents,
+  });
   const mixerOptions = {
     masterMixerState,
     trackMixerStates,
@@ -115,6 +141,7 @@ export async function renderArrangementToWav({
       event,
       mixerOptions,
       sampleBuffers,
+      stretchedSampleBuffers,
       tempoBpm: normalizedTempoBpm,
     });
   }
@@ -243,12 +270,225 @@ async function loadOfflineSampleBuffer({
   });
 }
 
+export function getMissingImportedAudioSourceBpmClipNamesForExport({
+  clipInstances,
+  clips,
+  sampleMetas,
+}: {
+  clipInstances: readonly ClipInstance[];
+  clips: readonly Clip[];
+  sampleMetas: readonly SampleMeta[];
+}): string[] {
+  const clipsById = new Map(clips.map((clip) => [clip.id, clip]));
+  const sampleMetasById = new Map(
+    sampleMetas.map((sampleMeta) => [sampleMeta.id, sampleMeta]),
+  );
+  const missingClipNames: string[] = [];
+
+  for (const instance of clipInstances) {
+    const clip = clipsById.get(instance.clipId);
+
+    if (!clip || !isAudioClip(clip)) {
+      continue;
+    }
+
+    const sourceBpm = sampleMetasById.get(clip.sampleId)?.source.sourceBpm;
+
+    if (!isValidImportedAudioSourceBpm(sourceBpm)) {
+      missingClipNames.push(clip.name);
+    }
+  }
+
+  return Array.from(new Set(missingClipNames));
+}
+
+interface OfflineStretchedSampleRenderOptions {
+  sampleBuffers: ReadonlyMap<SampleId, AudioBuffer>;
+  sampleEvents: readonly SampleLoopEvent[];
+}
+
+async function renderStretchedSampleBuffersForOfflineRender({
+  sampleBuffers,
+  sampleEvents,
+}: OfflineStretchedSampleRenderOptions): Promise<ReadonlyMap<string, AudioBuffer>> {
+  const stretchedSampleBuffers = new Map<string, AudioBuffer>();
+
+  for (const event of sampleEvents) {
+    const stretchRate = getSampleEventStretchRate(event);
+
+    if (stretchRate === 1) {
+      continue;
+    }
+
+    const cacheKey = getOfflineStretchedSampleBufferKey({
+      sampleId: event.sampleId,
+      stretchRate,
+    });
+
+    if (stretchedSampleBuffers.has(cacheKey)) {
+      continue;
+    }
+
+    const audioBuffer = sampleBuffers.get(event.sampleId);
+
+    if (!audioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before rendering.`);
+    }
+
+    stretchedSampleBuffers.set(
+      cacheKey,
+      await renderOfflineStretchedAudioBuffer({
+        audioBuffer,
+        sampleId: event.sampleId,
+        stretchRate,
+      }),
+    );
+  }
+
+  return stretchedSampleBuffers;
+}
+
+async function renderOfflineStretchedAudioBuffer({
+  audioBuffer,
+  sampleId,
+  stretchRate,
+}: {
+  audioBuffer: AudioBuffer;
+  sampleId: SampleId;
+  stretchRate: number;
+}): Promise<AudioBuffer> {
+  const renderedDurationSeconds = Math.max(0.01, audioBuffer.duration / stretchRate);
+  const renderPaddingSeconds = 0.25;
+  const offlineContext = createOfflineAudioContext({
+    channelCount: EXPORT_CHANNEL_COUNT,
+    frameCount: Math.max(
+      1,
+      Math.ceil(
+        (renderedDurationSeconds + renderPaddingSeconds) * audioBuffer.sampleRate,
+      ),
+    ),
+    sampleRate: audioBuffer.sampleRate,
+  });
+
+  try {
+    const stretchNode = await SignalsmithStretch(offlineContext, {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [EXPORT_CHANNEL_COUNT],
+    });
+
+    await stretchNode.configure({ preset: "default" });
+    await stretchNode.addBuffers(createStretchChannelBuffers(audioBuffer));
+    stretchNode.connect(offlineContext.destination);
+    await stretchNode.schedule({
+      active: true,
+      input: 0,
+      output: 0,
+      outputTime: 0,
+      rate: stretchRate,
+      semitones: 0,
+    });
+
+    const renderedBuffer = await offlineContext.startRendering();
+
+    try {
+      stretchNode.disconnect();
+    } catch {
+      // Offline rendering may already have torn down the graph.
+    }
+
+    return trimAudioBufferDuration({
+      audioBuffer: renderedBuffer,
+      durationSeconds: renderedDurationSeconds,
+    });
+  } catch (error) {
+    throw new Error(
+      `Pitch-preserving imported audio export failed for "${sampleId}" at ${stretchRate.toFixed(
+        6,
+      )}x. ${
+        error instanceof Error
+          ? error.message
+          : "The stretch runtime is unavailable in the offline export path."
+      }`,
+      { cause: error },
+    );
+  }
+}
+
+export interface OfflineSampleRenderPlan {
+  durationSeconds: number;
+  renderedOffsetSeconds: number;
+  sourceOffsetSeconds: number;
+  stretchRate: number;
+}
+
+export function resolveOfflineSampleRenderPlan({
+  arrangementLengthTicks,
+  event,
+  renderedBufferDurationSeconds,
+  sourceBufferDurationSeconds,
+  tempoBpm,
+}: {
+  arrangementLengthTicks: number;
+  event: SampleLoopEvent;
+  renderedBufferDurationSeconds: number;
+  sourceBufferDurationSeconds: number;
+  tempoBpm: number;
+}): OfflineSampleRenderPlan | null {
+  if (event.startTick >= arrangementLengthTicks) {
+    return null;
+  }
+
+  const stretchRate = getSampleEventStretchRate(event);
+  const sourceOffsetSeconds = Math.max(event.sourceOffsetSeconds ?? 0, 0);
+
+  if (sourceOffsetSeconds >= sourceBufferDurationSeconds) {
+    return null;
+  }
+
+  const renderedOffsetSeconds = sourceOffsetSeconds / stretchRate;
+
+  if (renderedOffsetSeconds >= renderedBufferDurationSeconds) {
+    return null;
+  }
+
+  const arrangementRemainingSeconds = ticksToSeconds(
+    arrangementLengthTicks - event.startTick,
+    { tempoBpm },
+  );
+  const eventDurationSeconds =
+    event.playbackDurationSeconds ??
+    (typeof event.durationTicks === "number"
+      ? ticksToSeconds(
+          Math.min(event.durationTicks, arrangementLengthTicks - event.startTick),
+          { tempoBpm },
+        )
+      : arrangementRemainingSeconds);
+  const durationSeconds = Math.min(
+    eventDurationSeconds,
+    arrangementRemainingSeconds,
+    renderedBufferDurationSeconds - renderedOffsetSeconds,
+  );
+
+  if (durationSeconds <= 0) {
+    return null;
+  }
+
+  return {
+    durationSeconds,
+    renderedOffsetSeconds,
+    sourceOffsetSeconds,
+    stretchRate,
+  };
+}
+
 function scheduleOfflineSampleEvent({
   arrangementLengthTicks,
   audioContext,
   event,
   mixerOptions,
   sampleBuffers,
+  stretchedSampleBuffers,
   tempoBpm,
 }: {
   arrangementLengthTicks: number;
@@ -256,50 +496,61 @@ function scheduleOfflineSampleEvent({
   event: SampleLoopEvent;
   mixerOptions: MixerGainOptions;
   sampleBuffers: ReadonlyMap<SampleId, AudioBuffer>;
+  stretchedSampleBuffers: ReadonlyMap<string, AudioBuffer>;
   tempoBpm: number;
 }): void {
-  if (event.startTick >= arrangementLengthTicks) {
-    return;
-  }
-
   const audioBuffer = sampleBuffers.get(event.sampleId);
 
   if (!audioBuffer) {
     throw new Error(`Sample "${event.sampleId}" must be loaded before rendering.`);
   }
 
+  const stretchRate = getSampleEventStretchRate(event);
+  const renderBuffer =
+    stretchRate === 1
+      ? audioBuffer
+      : stretchedSampleBuffers.get(
+          getOfflineStretchedSampleBufferKey({
+            sampleId: event.sampleId,
+            stretchRate,
+          }),
+        );
+
+  if (!renderBuffer) {
+    throw new Error(
+      `Stretched sample data is missing for "${event.sampleId}" at ${stretchRate.toFixed(
+        6,
+      )}x.`,
+    );
+  }
+
   const startSeconds = ticksToSeconds(event.startTick, { tempoBpm });
-  const sourceOffsetSeconds = Math.max(event.sourceOffsetSeconds ?? 0, 0);
   const mixerGain = getMixerGain({
     ...mixerOptions,
     trackId: event.trackId,
   });
   const gainValue = DEFAULT_SAMPLE_GAIN * (event.gain ?? 1);
 
-  if (gainValue <= 0 || mixerGain <= 0 || sourceOffsetSeconds >= audioBuffer.duration) {
+  if (gainValue <= 0 || mixerGain <= 0) {
+    return;
+  }
+
+  const renderPlan = resolveOfflineSampleRenderPlan({
+    arrangementLengthTicks,
+    event,
+    renderedBufferDurationSeconds: renderBuffer.duration,
+    sourceBufferDurationSeconds: audioBuffer.duration,
+    tempoBpm,
+  });
+
+  if (!renderPlan) {
     return;
   }
 
   const sourceNode = audioContext.createBufferSource();
   const gainNode = audioContext.createGain();
-  const eventDurationSeconds =
-    event.durationTicks === undefined
-      ? undefined
-      : ticksToSeconds(
-          Math.min(event.durationTicks, arrangementLengthTicks - event.startTick),
-          { tempoBpm },
-        );
-  const bufferDurationSeconds = audioBuffer.duration - sourceOffsetSeconds;
-  const durationSeconds =
-    eventDurationSeconds === undefined
-      ? bufferDurationSeconds
-      : Math.min(eventDurationSeconds, bufferDurationSeconds);
 
-  if (durationSeconds <= 0) {
-    return;
-  }
-
-  sourceNode.buffer = audioBuffer;
+  sourceNode.buffer = renderBuffer;
   gainNode.gain.value = gainValue;
   sourceNode.connect(gainNode);
   connectOfflineMixerRoute({
@@ -310,11 +561,11 @@ function scheduleOfflineSampleEvent({
     trackId: event.trackId,
   });
 
-  if (event.durationTicks === undefined) {
-    sourceNode.start(startSeconds, sourceOffsetSeconds);
-  } else {
-    sourceNode.start(startSeconds, sourceOffsetSeconds, durationSeconds);
-  }
+  sourceNode.start(
+    startSeconds,
+    renderPlan.renderedOffsetSeconds,
+    renderPlan.durationSeconds,
+  );
 }
 
 function scheduleOfflineNoteEvent({
@@ -639,6 +890,73 @@ function createOfflineAudioContext({
   }
 
   return new OfflineAudioContext(channelCount, frameCount, sampleRate);
+}
+
+function getSampleEventStretchRate(event: SampleLoopEvent): number {
+  if (typeof event.stretchRate !== "number") {
+    return 1;
+  }
+
+  if (!Number.isFinite(event.stretchRate) || event.stretchRate <= 0) {
+    throw new Error(
+      `Invalid stretch rate for sample "${event.sampleId}": ${event.stretchRate}.`,
+    );
+  }
+
+  return Math.abs(event.stretchRate - 1) < 0.000001 ? 1 : event.stretchRate;
+}
+
+function getOfflineStretchedSampleBufferKey({
+  sampleId,
+  stretchRate,
+}: {
+  sampleId: SampleId;
+  stretchRate: number;
+}): string {
+  return `${sampleId}\u0000${stretchRate.toFixed(6)}`;
+}
+
+function trimAudioBufferDuration({
+  audioBuffer,
+  durationSeconds,
+}: {
+  audioBuffer: AudioBuffer;
+  durationSeconds: number;
+}): AudioBuffer {
+  const targetLength = Math.min(
+    audioBuffer.length,
+    Math.max(1, Math.ceil(durationSeconds * audioBuffer.sampleRate)),
+  );
+
+  if (targetLength === audioBuffer.length) {
+    return audioBuffer;
+  }
+
+  const trimmedBuffer = new AudioBuffer({
+    length: targetLength,
+    numberOfChannels: audioBuffer.numberOfChannels,
+    sampleRate: audioBuffer.sampleRate,
+  });
+
+  for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
+    trimmedBuffer
+      .getChannelData(channelIndex)
+      .set(audioBuffer.getChannelData(channelIndex).subarray(0, targetLength));
+  }
+
+  return trimmedBuffer;
+}
+
+function createStretchChannelBuffers(
+  audioBuffer: AudioBuffer,
+): [Float32Array, Float32Array] {
+  const left = new Float32Array(audioBuffer.getChannelData(0));
+  const right =
+    audioBuffer.numberOfChannels > 1
+      ? new Float32Array(audioBuffer.getChannelData(1))
+      : new Float32Array(left);
+
+  return [left, right];
 }
 
 function midiNoteToFrequency(midiNote: number): number {

@@ -85,7 +85,7 @@ The current first pass reuses the existing lookahead loop scheduler for `SONG` m
 
 The arrangement view may set loop start and loop end at bar boundaries. `SONG` playback should pass those ticks as the scheduler `loopStartTick` and `loopEndTick`. Selecting clips or instruments in the sidebar while `SONG` mode is playing must not replace the active arrangement scheduler with selected-clip `PAT` events.
 
-Imported audio clips should play at original speed unless a time-stretching feature explicitly changes that behavior. If an audio clip instance is shorter than the source buffer, playback should be cropped. If the instance is longer than the source buffer, playback may end naturally and leave silence. If runtime file data is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
+Imported audio clips use source BPM metadata and project BPM for pitch-preserving stretch when scheduled from `SONG` mode. If an audio clip instance is shorter than the stretched source buffer, playback should be cropped. If the instance is longer than the stretched source buffer, playback may end naturally and leave silence. If runtime file data or source BPM metadata is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
 
 `SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched imported audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
 
@@ -108,7 +108,13 @@ The current first export pass:
 
 WAV encoding can be a small utility that converts rendered PCM into a Blob. MP3, FLAC, stem export, cloud export, and mastering processors are separate features.
 
-If live imported audio playback becomes BPM-aware, offline WAV export should be updated separately to match it. Do not silently fall back to unstretched imported audio when the user expects tempo-synced export. The export path must verify that the chosen stretch implementation works with `OfflineAudioContext` or provide a clear unsupported-state error until a working offline adapter exists.
+Arrangement WAV export should match live `SONG` playback for imported audio clips. The export path uses source BPM metadata and project BPM to calculate:
+
+```text
+stretchRate = projectBpm / sourceBpm
+```
+
+Imported audio should be pitch-preserving in exported WAV files. The current export path pre-renders stretched imported sample buffers with `signalsmith-stretch` in an offline context, then places those rendered buffers into the main arrangement `OfflineAudioContext`. Do not silently fall back to unstretched imported audio when the user expects tempo-synced export. If source BPM metadata, imported sample bytes, or stretch runtime support is unavailable, export should fail with a clear error.
 
 ## Mixer Routing
 
