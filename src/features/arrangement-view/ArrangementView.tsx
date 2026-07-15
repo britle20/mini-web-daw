@@ -491,6 +491,7 @@ function ClipContent({ kind }: { kind: "audio" | "midi" }) {
   );
 }
 
+
 function getLoopRegionStyle(loopRange: ArrangementLoopRange): CSSProperties {
   return {
     left: `${tickToPixels(loopRange.startTick)}px`,

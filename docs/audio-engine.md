@@ -51,15 +51,19 @@ The first imported WAV implementation may support a simple preview or clip playb
 
 Imported audio clip duration is source media duration in seconds. Future arrangement placement should convert arrangement positions and visible instance lengths to ticks, while source offsets remain sample-local seconds. Without a time-stretching feature, resizing an audio clip instance should trim/crop playback or extend silence rather than stretch the audio to a new musical duration.
 
-BPM-aware imported audio playback is a later feature. It should require source BPM metadata for newly imported WAV files and derive stretch rate from:
+BPM-aware imported audio playback requires source BPM metadata for newly imported WAV files and derives stretch rate from:
 
 ```text
 stretchRate = projectBpm / sourceBpm
 ```
 
-The stretch path should preserve pitch and live inside the audio engine or a narrow audio adapter. If `signalsmith-stretch` is used as a production dependency, keep it behind a typed audio-engine API and document the dependency in the PR. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound, but startup should use a conservative schedule lead time or retry behavior because very tight start scheduling can fail to advance.
+The stretch path preserves pitch and lives inside the audio engine. `signalsmith-stretch` is a justified production dependency because the Web Audio API does not provide high-quality pitch-preserving time stretching natively. Keep the dependency behind the typed audio-engine API and do not call it from React components. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound; arrangement integration should follow the same scheduling shape by passing both `output` and `outputTime` when activating the stretch node.
+
+If pitch-preserving stretch has to be disabled for a browser-specific issue, imported audio clips may temporarily use an `AudioBufferSourceNode.playbackRate` fallback derived from `projectBpm / sourceBpm`. This keeps clips audible and tempo-following, but it does not preserve pitch and should be treated as a fallback rather than the target behavior.
 
 Project BPM changes should apply to imported audio stretch on the next playback start. Do not attempt live stretch-ratio changes for already-playing imported audio in the first implementation.
+
+When a loop contains stretched imported audio, the scheduler should start against an audio time far enough in the future for the stretch node to compensate for its own latency. Increasing the lookahead window alone is not enough if the first event is still scheduled at `AudioContext.currentTime`.
 
 ## Arrangement Playback
 
@@ -83,7 +87,7 @@ The arrangement view may set loop start and loop end at bar boundaries. `SONG` p
 
 Imported audio clips should play at original speed unless a time-stretching feature explicitly changes that behavior. If an audio clip instance is shorter than the source buffer, playback should be cropped. If the instance is longer than the source buffer, playback may end naturally and leave silence. If runtime file data is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
 
-When BPM-aware imported audio playback exists, `SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
+`SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched imported audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
 
 Arrangement playback still uses the lookahead scheduler. UI drag state, arrangement DOM geometry, visual playheads, decoded buffers, and active source nodes remain runtime-only.
 

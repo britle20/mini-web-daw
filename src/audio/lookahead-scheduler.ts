@@ -9,7 +9,9 @@ import {
 export type SchedulerStatus = "stopped" | "playing" | "paused";
 
 export interface TickEvent {
+  durationTicks?: Tick;
   id: string;
+  scheduleWhenOverlappingStart?: boolean;
   startTick: Tick;
 }
 
@@ -55,6 +57,7 @@ export interface LookaheadSchedulerOptions<TEvent extends TickEvent> {
   ppq?: number;
   scheduleAheadTime?: number;
   setIntervalFn?: SetSchedulerInterval;
+  startDelaySeconds?: number;
   tempoBpm: number;
 }
 
@@ -103,6 +106,35 @@ export function collectScheduledEventsForWindow<TEvent extends TickEvent>({
     }
 
     const eventOffsetTicks = event.startTick - loopStartTick;
+    const overlappingStartLoopIteration = getOverlappingStartLoopIteration({
+      eventDurationTicks: event.durationTicks,
+      eventOffsetTicks,
+      loopLengthTicks,
+      loopStartTick,
+      scheduleWhenOverlappingStart: event.scheduleWhenOverlappingStart,
+      startTick,
+      windowStartTick,
+    });
+
+    if (overlappingStartLoopIteration !== null) {
+      const absoluteTick =
+        loopStartTick +
+        overlappingStartLoopIteration * loopLengthTicks +
+        eventOffsetTicks;
+
+      scheduledEvents.push(
+        createScheduledEvent({
+          absoluteTick,
+          audioStartTime,
+          event,
+          loopIteration: overlappingStartLoopIteration,
+          ppq,
+          startTick,
+          tempoBpm,
+        }),
+      );
+    }
+
     const distanceToWindowStartTicks =
       windowStartTick - loopStartTick - eventOffsetTicks;
     const firstLoopIteration = Math.max(
@@ -124,26 +156,103 @@ export function collectScheduledEventsForWindow<TEvent extends TickEvent>({
         continue;
       }
 
-      scheduledEvents.push({
-        absoluteTick,
-        audioTime: tickToAudioTime({
+      scheduledEvents.push(
+        createScheduledEvent({
+          absoluteTick,
           audioStartTime,
+          event,
+          loopIteration,
           ppq,
           startTick,
           tempoBpm,
-          tick: absoluteTick,
         }),
-        event,
-        loopIteration,
-        loopTick: event.startTick,
-        tempoBpm,
-      });
+      );
 
       loopIteration += 1;
     }
   }
 
   return scheduledEvents.sort((left, right) => left.absoluteTick - right.absoluteTick);
+}
+
+function createScheduledEvent<TEvent extends TickEvent>({
+  absoluteTick,
+  audioStartTime,
+  event,
+  loopIteration,
+  ppq,
+  startTick,
+  tempoBpm,
+}: {
+  absoluteTick: Tick;
+  audioStartTime: number;
+  event: TEvent;
+  loopIteration: number;
+  ppq: number;
+  startTick: Tick;
+  tempoBpm: number;
+}): ScheduledTickEvent<TEvent> {
+  return {
+    absoluteTick,
+    audioTime: tickToAudioTime({
+      audioStartTime,
+      ppq,
+      startTick,
+      tempoBpm,
+      tick: absoluteTick,
+    }),
+    event,
+    loopIteration,
+    loopTick: event.startTick,
+    tempoBpm,
+  };
+}
+
+function getOverlappingStartLoopIteration({
+  eventDurationTicks,
+  eventOffsetTicks,
+  loopLengthTicks,
+  loopStartTick,
+  scheduleWhenOverlappingStart,
+  startTick,
+  windowStartTick,
+}: {
+  eventDurationTicks: Tick | undefined;
+  eventOffsetTicks: Tick;
+  loopLengthTicks: Tick;
+  loopStartTick: Tick;
+  scheduleWhenOverlappingStart: boolean | undefined;
+  startTick: Tick;
+  windowStartTick: Tick;
+}): number | null {
+  if (
+    !scheduleWhenOverlappingStart ||
+    typeof eventDurationTicks !== "number" ||
+    eventDurationTicks <= 0 ||
+    windowStartTick !== startTick
+  ) {
+    return null;
+  }
+
+  const loopIteration = Math.floor(
+    (windowStartTick - loopStartTick - eventOffsetTicks) / loopLengthTicks,
+  );
+
+  if (loopIteration < 0) {
+    return null;
+  }
+
+  const absoluteTick =
+    loopStartTick + loopIteration * loopLengthTicks + eventOffsetTicks;
+
+  if (
+    absoluteTick < windowStartTick &&
+    absoluteTick + eventDurationTicks > windowStartTick
+  ) {
+    return loopIteration;
+  }
+
+  return null;
 }
 
 export function getLoopTickAtAbsoluteTick({
@@ -172,6 +281,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
   private readonly scheduleAheadTime: number;
   private readonly scheduleEvent: (scheduledEvent: ScheduledTickEvent<TEvent>) => void;
   private readonly setIntervalFn: SetSchedulerInterval;
+  private readonly startDelaySeconds: number;
   private audioStartTime: number | null = null;
   private events: readonly TEvent[];
   private nextScheduleTick: Tick;
@@ -195,10 +305,12 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     scheduleAheadTime = DEFAULT_SCHEDULE_AHEAD_TIME,
     scheduleEvent,
     setIntervalFn = defaultSetSchedulerInterval,
+    startDelaySeconds = 0,
     tempoBpm,
   }: LookaheadSchedulerOptions<TEvent>) {
     validateLoopRange(loopStartTick, loopEndTick);
     validateTempoBpm(tempoBpm);
+    validateStartDelaySeconds(startDelaySeconds);
 
     this.clearIntervalFn = clearIntervalFn;
     this.events = events;
@@ -211,6 +323,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     this.scheduleAheadTime = scheduleAheadTime;
     this.scheduleEvent = scheduleEvent;
     this.setIntervalFn = setIntervalFn;
+    this.startDelaySeconds = startDelaySeconds;
     this.startTick = loopStartTick;
     this.tempoBpm = tempoBpm;
   }
@@ -221,7 +334,7 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
     }
 
     this.startTick = this.normalizeLoopTick(startTick);
-    this.audioStartTime = this.getAudioTime();
+    this.audioStartTime = this.getAudioTime() + this.startDelaySeconds;
     this.nextScheduleTick = this.startTick;
     this.status = "playing";
     this.scheduleNextWindow();
@@ -313,6 +426,10 @@ export class LookaheadScheduler<TEvent extends TickEvent> {
       return this.startTick;
     }
 
+    if (audioTime <= this.audioStartTime) {
+      return this.startTick;
+    }
+
     return audioTimeToTick({
       audioStartTime: this.audioStartTime,
       audioTime,
@@ -394,5 +511,13 @@ function validateLoopRange(loopStartTick: Tick, loopEndTick: Tick): void {
 function validateTempoBpm(tempoBpm: number): void {
   if (!Number.isFinite(tempoBpm) || tempoBpm <= 0) {
     throw new Error(`tempoBpm must be a positive finite number. Received ${tempoBpm}.`);
+  }
+}
+
+function validateStartDelaySeconds(startDelaySeconds: number): void {
+  if (!Number.isFinite(startDelaySeconds) || startDelaySeconds < 0) {
+    throw new Error(
+      `startDelaySeconds must be a non-negative finite number. Received ${startDelaySeconds}.`,
+    );
   }
 }

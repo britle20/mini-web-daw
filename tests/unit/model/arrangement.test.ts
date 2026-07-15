@@ -137,6 +137,27 @@ describe("arrangement model", () => {
     expect(instance.lengthTicks).toBe(1440);
   });
 
+  it("uses source BPM for imported audio clip instance length when available", () => {
+    const { clip } = createImportedAudioClipDraft({
+      clipId: "audio-clip-loop",
+      durationSeconds: 2,
+      fileName: "Loop.wav",
+      mimeType: "audio/wav",
+      sampleId: "imported-audio-loop",
+      sourceBpm: 120,
+    });
+    const instance = createClipInstance({
+      clip,
+      existingInstanceIds: [],
+      sourceBpm: 120,
+      startTick: 0,
+      tempoBpm: 180,
+      trackId: "track-1",
+    });
+
+    expect(instance.lengthTicks).toBe(1920);
+  });
+
   it("moves and deletes clip instances without mutating source clips", () => {
     const clip = createEmptyHybridClip({ id: "clip-1" });
     const instance = createClipInstance({

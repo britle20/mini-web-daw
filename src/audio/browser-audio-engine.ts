@@ -1,4 +1,5 @@
 import { BUNDLED_SAMPLES } from "./bundled-samples";
+import SignalsmithStretch from "signalsmith-stretch";
 import { decodeAudioBuffer } from "./audio-buffer-decoder";
 import { LookaheadScheduler } from "./lookahead-scheduler";
 import { connectMixerEffectGraph } from "./mixer-effects";
@@ -42,8 +43,14 @@ import {
 const DEFAULT_SAMPLE_GAIN = 0.9;
 const DEFAULT_SYNTH_GAIN = 0.22;
 const DEFAULT_SAMPLER_GAIN = 0.72;
+const MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS = 1;
+const STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS = 0.005;
+const ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH = true;
 
 type AudioContextConstructor = new () => AudioContext;
+type OfflineAudioContextConstructor = new (
+  options: OfflineAudioContextOptions,
+) => OfflineAudioContext;
 
 type ClipLoopEvent =
   | ({ kind: "note" } & NoteLoopEvent)
@@ -79,6 +86,20 @@ export function createAudioEngine(
 export class BrowserAudioEngine implements AudioEngine {
   private readonly samplesById: Map<SampleId, BundledSampleMeta>;
   private readonly sampleCache = new Map<SampleId, AudioBuffer>();
+  private readonly stretchChannelBufferCache = new Map<
+    SampleId,
+    [Float32Array, Float32Array]
+  >();
+  private readonly stretchedSampleBufferCache = new Map<string, AudioBuffer>();
+  private readonly stretchedSampleCacheKeysBySampleId = new Map<
+    SampleId,
+    Set<string>
+  >();
+  private readonly sampleCacheVersions = new Map<SampleId, number>();
+  private readonly renderingStretchedSampleBuffers = new Map<
+    string,
+    Promise<AudioBuffer>
+  >();
   private readonly loadingSamples = new Map<SampleId, Promise<AudioBuffer>>();
   private readonly activeNoteVoices = new Set<ActiveNoteVoice>();
   private readonly activeSampleVoices = new Set<ActiveSamplePreview>();
@@ -191,6 +212,7 @@ export class BrowserAudioEngine implements AudioEngine {
     const sample = this.getSample(sampleId);
     const loadPromise = this.fetchAndDecodeSample(sample)
       .then((audioBuffer) => {
+        this.deleteSampleDerivedCaches(sampleId);
         this.sampleCache.set(sampleId, audioBuffer);
         return audioBuffer;
       })
@@ -230,6 +252,7 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     this.loadingSamples.delete(sampleId);
+    this.deleteSampleDerivedCaches(sampleId);
     this.sampleCache.set(sampleId, audioBuffer);
     return audioBuffer;
   }
@@ -287,6 +310,7 @@ export class BrowserAudioEngine implements AudioEngine {
     startTick,
     tempoBpm,
   }: StartClipLoopOptions): Promise<TransportSnapshot> {
+    const startToken = this.beginSampleLoopUpdate();
     const normalizedTempoBpm = clampTempoBpm(tempoBpm);
 
     await this.resume();
@@ -296,9 +320,27 @@ export class BrowserAudioEngine implements AudioEngine {
       this.loadSamplesForNoteLoopEvents(noteEvents),
     ]);
 
-    this.stopLoop();
+    if (!this.isCurrentSampleLoopUpdate(startToken)) {
+      return this.getTransportSnapshot();
+    }
 
+    const stretchedSampleStartDelaySeconds =
+      await this.prepareStretchedSampleBuffers(sampleEvents);
+
+    if (!this.isCurrentSampleLoopUpdate(startToken)) {
+      return this.getTransportSnapshot();
+    }
+
+    this.stopLoopPlayback();
     const audioContext = this.getOrCreateAudioContext();
+    const normalizedScheduleAheadTime = hasStretchedSampleEvents(sampleEvents)
+      ? Math.max(
+          scheduleAheadTime ?? 0,
+          MIN_STRETCHED_SAMPLE_SCHEDULE_AHEAD_SECONDS,
+          stretchedSampleStartDelaySeconds + 0.05,
+        )
+      : scheduleAheadTime;
+
     this.clipLoopScheduler = new LookaheadScheduler<ClipLoopEvent>({
       events: createClipLoopEvents({ noteEvents, sampleEvents }),
       getAudioTime: () => audioContext.currentTime,
@@ -306,12 +348,20 @@ export class BrowserAudioEngine implements AudioEngine {
       loopEndTick,
       loopStartTick,
       ppq,
-      scheduleAheadTime,
+      scheduleAheadTime: normalizedScheduleAheadTime,
       scheduleEvent: ({ audioTime, event, tempoBpm: scheduledTempoBpm }) => {
         if (event.kind === "sample") {
-          this.scheduleLoadedSample(event.sampleId, {
-            gain: event.gain,
-            trackId: event.trackId,
+          if (isStretchedSampleEvent(event)) {
+            void this.scheduleStretchedSample(event, {
+              scheduleToken: this.sampleLoopUpdateToken,
+              tempoBpm: scheduledTempoBpm,
+              when: audioTime,
+            }).catch(() => undefined);
+            return;
+          }
+
+          this.scheduleSampleLoopEvent(event, {
+            tempoBpm: scheduledTempoBpm,
             when: audioTime,
           });
           return;
@@ -322,6 +372,7 @@ export class BrowserAudioEngine implements AudioEngine {
           when: audioTime,
         });
       },
+      startDelaySeconds: stretchedSampleStartDelaySeconds,
       tempoBpm: normalizedTempoBpm,
     });
     this.tempoBpm = normalizedTempoBpm;
@@ -330,7 +381,7 @@ export class BrowserAudioEngine implements AudioEngine {
   }
 
   pauseLoop(): TransportSnapshot {
-    this.sampleLoopUpdateToken += 1;
+    this.beginSampleLoopUpdate();
     this.stopActiveSampleVoices();
     this.stopActiveNoteVoices();
 
@@ -342,7 +393,11 @@ export class BrowserAudioEngine implements AudioEngine {
   }
 
   stopLoop(): TransportSnapshot {
-    this.sampleLoopUpdateToken += 1;
+    this.beginSampleLoopUpdate();
+    return this.stopLoopPlayback();
+  }
+
+  private stopLoopPlayback(): TransportSnapshot {
     this.stopActiveSampleVoices();
     this.stopActiveNoteVoices();
 
@@ -356,6 +411,15 @@ export class BrowserAudioEngine implements AudioEngine {
     return snapshot;
   }
 
+  private beginSampleLoopUpdate(): number {
+    this.sampleLoopUpdateToken += 1;
+    return this.sampleLoopUpdateToken;
+  }
+
+  private isCurrentSampleLoopUpdate(updateToken: number): boolean {
+    return updateToken === this.sampleLoopUpdateToken;
+  }
+
   setTempoBpm(tempoBpm: number): TransportSnapshot {
     const normalizedTempoBpm = clampTempoBpm(tempoBpm);
 
@@ -363,6 +427,14 @@ export class BrowserAudioEngine implements AudioEngine {
 
     if (!this.clipLoopScheduler) {
       return this.getTransportSnapshot();
+    }
+
+    const wasPlaying = this.clipLoopScheduler.getSnapshot().status === "playing";
+
+    if (wasPlaying) {
+      this.beginSampleLoopUpdate();
+      this.stopActiveSampleVoices();
+      this.stopActiveNoteVoices();
     }
 
     return this.clipLoopScheduler.setTempoBpm(normalizedTempoBpm);
@@ -388,14 +460,19 @@ export class BrowserAudioEngine implements AudioEngine {
       return this.getTransportSnapshot();
     }
 
-    const updateToken = (this.sampleLoopUpdateToken += 1);
-
+    const updateToken = this.beginSampleLoopUpdate();
     await Promise.all([
       this.loadSamplesForLoopEvents(sampleEvents),
       this.loadSamplesForNoteLoopEvents(noteEvents),
     ]);
 
-    if (updateToken !== this.sampleLoopUpdateToken || !this.clipLoopScheduler) {
+    if (!this.isCurrentSampleLoopUpdate(updateToken) || !this.clipLoopScheduler) {
+      return this.getTransportSnapshot();
+    }
+
+    await this.prepareStretchedSampleBuffers(sampleEvents);
+
+    if (!this.isCurrentSampleLoopUpdate(updateToken) || !this.clipLoopScheduler) {
       return this.getTransportSnapshot();
     }
 
@@ -417,6 +494,245 @@ export class BrowserAudioEngine implements AudioEngine {
       activeSamplePreview,
       this.audioContext?.currentTime ?? 0,
     );
+  }
+
+  private async prepareStretchedSampleBuffers(
+    events: readonly SampleLoopEvent[],
+  ): Promise<number> {
+    const stretchedEvents = events.filter(isStretchedSampleEvent);
+
+    await Promise.all(
+      stretchedEvents.map(async (event) => {
+        await this.getOrRenderStretchedSampleBuffer(event);
+      }),
+    );
+
+    return 0;
+  }
+
+  private async getOrRenderStretchedSampleBuffer(
+    event: SampleLoopEvent,
+  ): Promise<AudioBuffer> {
+    const stretchRate = event.stretchRate ?? 1;
+    const cacheKey = getStretchedSampleCacheKey({
+      sampleId: event.sampleId,
+      sampleVersion: this.getSampleCacheVersion(event.sampleId),
+      stretchRate,
+    });
+    const cachedBuffer = this.stretchedSampleBufferCache.get(cacheKey);
+
+    if (cachedBuffer) {
+      return cachedBuffer;
+    }
+
+    const pendingRender = this.renderingStretchedSampleBuffers.get(cacheKey);
+
+    if (pendingRender) {
+      return pendingRender;
+    }
+
+    const audioBuffer = this.sampleCache.get(event.sampleId);
+
+    if (!audioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before scheduling.`);
+    }
+
+    if (isUnityStretchRate(stretchRate)) {
+      this.stretchedSampleBufferCache.set(cacheKey, audioBuffer);
+      this.registerStretchedSampleCacheKey(event.sampleId, cacheKey);
+      return audioBuffer;
+    }
+
+    const renderPromise = this.renderStretchedAudioBuffer({
+      audioBuffer,
+      sampleId: event.sampleId,
+      stretchRate,
+    })
+      .then((stretchedBuffer) => {
+        this.stretchedSampleBufferCache.set(cacheKey, stretchedBuffer);
+        this.registerStretchedSampleCacheKey(event.sampleId, cacheKey);
+        return stretchedBuffer;
+      })
+      .finally(() => {
+        this.renderingStretchedSampleBuffers.delete(cacheKey);
+      });
+
+    this.renderingStretchedSampleBuffers.set(cacheKey, renderPromise);
+    return renderPromise;
+  }
+
+  private async renderStretchedAudioBuffer({
+    audioBuffer,
+    sampleId,
+    stretchRate,
+  }: {
+    audioBuffer: AudioBuffer;
+    sampleId: SampleId;
+    stretchRate: number;
+  }): Promise<AudioBuffer> {
+    const channelCount = 2;
+    const renderedDurationSeconds = Math.max(
+      0.01,
+      audioBuffer.duration / stretchRate,
+    );
+    const renderPaddingSeconds = 0.25;
+    const offlineContext = new (getOfflineAudioContextConstructor())({
+      length: Math.max(
+        1,
+        Math.ceil(
+          (renderedDurationSeconds + renderPaddingSeconds) * audioBuffer.sampleRate,
+        ),
+      ),
+      numberOfChannels: channelCount,
+      sampleRate: audioBuffer.sampleRate,
+    });
+    const stretchNode = await SignalsmithStretch(offlineContext, {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [channelCount],
+    });
+
+    await stretchNode.configure({ preset: "default" });
+    await stretchNode.addBuffers(
+      this.getStretchChannelBuffers(sampleId, audioBuffer),
+    );
+    stretchNode.connect(offlineContext.destination);
+    await stretchNode.schedule({
+      active: true,
+      input: 0,
+      output: 0,
+      outputTime: 0,
+      rate: stretchRate,
+      semitones: 0,
+    });
+
+    const renderedBuffer = await offlineContext.startRendering();
+
+    try {
+      stretchNode.disconnect();
+    } catch {
+      // The offline context may already have torn down the graph.
+    }
+
+    return trimAudioBufferDuration({
+      audioBuffer: renderedBuffer,
+      durationSeconds: renderedDurationSeconds,
+    });
+  }
+
+  private async scheduleStretchedSample(
+    event: SampleLoopEvent,
+    {
+      scheduleToken,
+      tempoBpm,
+      when,
+    }: {
+      scheduleToken: number;
+      tempoBpm: number;
+      when: number;
+    },
+  ): Promise<void> {
+    const audioContext = this.getOrCreateAudioContext();
+    const sourceAudioBuffer = this.sampleCache.get(event.sampleId);
+
+    if (!sourceAudioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before scheduling.`);
+    }
+
+    const stretchRate = event.stretchRate ?? 1;
+    const stretchedAudioBuffer = await this.getOrRenderStretchedSampleBuffer(event);
+
+    if (
+      !this.isCurrentSampleLoopUpdate(scheduleToken) ||
+      this.clipLoopScheduler?.getSnapshot().status !== "playing"
+    ) {
+      return;
+    }
+
+    const lateBySeconds = Math.max(0, audioContext.currentTime - when);
+    const startTime = Math.max(when, audioContext.currentTime);
+    const sourceOffsetSeconds = Math.max(
+      (event.sourceOffsetSeconds ?? 0) + lateBySeconds * stretchRate,
+      0,
+    );
+    const renderedOffsetSeconds = sourceOffsetSeconds / stretchRate;
+
+    if (
+      sourceOffsetSeconds >= sourceAudioBuffer.duration ||
+      renderedOffsetSeconds >= stretchedAudioBuffer.duration
+    ) {
+      return;
+    }
+
+    const playbackDurationSeconds =
+      event.playbackDurationSeconds ??
+      (typeof event.durationTicks === "number"
+        ? ticksToSeconds(event.durationTicks, { tempoBpm })
+        : (sourceAudioBuffer.duration - sourceOffsetSeconds) / stretchRate);
+    const adjustedPlaybackDurationSeconds = Math.max(
+      0.01,
+      playbackDurationSeconds - lateBySeconds,
+    );
+    const remainingOutputSeconds =
+      stretchedAudioBuffer.duration - renderedOffsetSeconds;
+    const stopTime =
+      startTime +
+      Math.max(
+        0.01,
+        Math.min(adjustedPlaybackDurationSeconds, remainingOutputSeconds),
+      );
+    const releaseStartTime = Math.max(
+      startTime,
+      stopTime - STRETCHED_SAMPLE_GAIN_RELEASE_SECONDS,
+    );
+    const sourceNode = audioContext.createBufferSource();
+    const gainNode = audioContext.createGain();
+    const sampleVoice = {
+      gainNode,
+      sourceNode,
+    };
+
+    sourceNode.buffer = stretchedAudioBuffer;
+    gainNode.gain.setValueAtTime(
+      DEFAULT_SAMPLE_GAIN * (event.gain ?? 1),
+      startTime,
+    );
+    gainNode.gain.setValueAtTime(
+      DEFAULT_SAMPLE_GAIN * (event.gain ?? 1),
+      releaseStartTime,
+    );
+    gainNode.gain.linearRampToValueAtTime(0, stopTime);
+    sourceNode.connect(gainNode);
+    this.connectSourceGain(gainNode, event.trackId);
+
+    this.activeSampleVoices.add(sampleVoice);
+    sourceNode.addEventListener(
+      "ended",
+      () => {
+        this.activeSampleVoices.delete(sampleVoice);
+        disconnectAudioNode(sourceNode);
+        disconnectAudioNode(gainNode);
+      },
+      { once: true },
+    );
+    sourceNode.start(startTime, renderedOffsetSeconds);
+    sourceNode.stop(stopTime);
+  }
+
+  private getStretchChannelBuffers(
+    sampleId: SampleId,
+    audioBuffer: AudioBuffer,
+  ): [Float32Array, Float32Array] {
+    const cachedBuffers = this.stretchChannelBufferCache.get(sampleId);
+
+    if (cachedBuffers) {
+      return cachedBuffers;
+    }
+
+    const channelBuffers = createStretchChannelBuffers(audioBuffer);
+
+    this.stretchChannelBufferCache.set(sampleId, channelBuffers);
+    return channelBuffers;
   }
 
   private scheduleLoadedSample(
@@ -460,6 +776,82 @@ export class BrowserAudioEngine implements AudioEngine {
     sourceNode.start(
       Math.max(options.when ?? audioContext.currentTime, audioContext.currentTime),
     );
+
+    return sampleVoice;
+  }
+
+  private scheduleSampleLoopEvent(
+    event: SampleLoopEvent,
+    {
+      tempoBpm,
+      when,
+    }: {
+      tempoBpm: number;
+      when: number;
+    },
+  ): ActiveSamplePreview | null {
+    if (!isRangedSampleEvent(event)) {
+      return this.scheduleLoadedSample(event.sampleId, {
+        gain: event.gain,
+        trackId: event.trackId,
+        when,
+      });
+    }
+
+    const audioContext = this.getOrCreateAudioContext();
+    const audioBuffer = this.sampleCache.get(event.sampleId);
+
+    if (!audioBuffer) {
+      throw new Error(`Sample "${event.sampleId}" must be loaded before scheduling.`);
+    }
+
+    const sourceOffsetSeconds = Math.max(event.sourceOffsetSeconds ?? 0, 0);
+
+    if (sourceOffsetSeconds >= audioBuffer.duration) {
+      return null;
+    }
+
+    const playbackRate =
+      typeof event.stretchRate === "number" && event.stretchRate > 0
+        ? event.stretchRate
+        : 1;
+    const playbackDurationSeconds =
+      event.playbackDurationSeconds ??
+      (typeof event.durationTicks === "number"
+        ? ticksToSeconds(event.durationTicks, { tempoBpm })
+        : (audioBuffer.duration - sourceOffsetSeconds) / playbackRate);
+    const remainingOutputSeconds =
+      (audioBuffer.duration - sourceOffsetSeconds) / playbackRate;
+    const durationSeconds = Math.max(
+      0.01,
+      Math.min(playbackDurationSeconds, remainingOutputSeconds),
+    );
+    const sourceNode = audioContext.createBufferSource();
+    const gainNode = audioContext.createGain();
+    const startTime = Math.max(when, audioContext.currentTime);
+    const sampleVoice = {
+      gainNode,
+      sourceNode,
+    };
+
+    sourceNode.buffer = audioBuffer;
+    sourceNode.playbackRate.setValueAtTime(playbackRate, startTime);
+    gainNode.gain.value = event.gain ?? DEFAULT_SAMPLE_GAIN;
+    sourceNode.connect(gainNode);
+    this.connectSourceGain(gainNode, event.trackId);
+
+    this.activeSampleVoices.add(sampleVoice);
+    sourceNode.addEventListener(
+      "ended",
+      () => {
+        this.activeSampleVoices.delete(sampleVoice);
+        disconnectAudioNode(sourceNode);
+        disconnectAudioNode(gainNode);
+      },
+      { once: true },
+    );
+    sourceNode.start(startTime, sourceOffsetSeconds);
+    sourceNode.stop(startTime + durationSeconds);
 
     return sampleVoice;
   }
@@ -728,6 +1120,48 @@ export class BrowserAudioEngine implements AudioEngine {
     disconnectAudioNode(noteVoice.gainNode);
   }
 
+  private deleteSampleDerivedCaches(sampleId: SampleId): void {
+    this.sampleCacheVersions.set(
+      sampleId,
+      this.getSampleCacheVersion(sampleId) + 1,
+    );
+    this.stretchChannelBufferCache.delete(sampleId);
+    this.deleteStretchedSampleBufferCache(sampleId);
+  }
+
+  private getSampleCacheVersion(sampleId: SampleId): number {
+    return this.sampleCacheVersions.get(sampleId) ?? 0;
+  }
+
+  private registerStretchedSampleCacheKey(
+    sampleId: SampleId,
+    cacheKey: string,
+  ): void {
+    const cacheKeys = this.stretchedSampleCacheKeysBySampleId.get(sampleId);
+
+    if (cacheKeys) {
+      cacheKeys.add(cacheKey);
+      return;
+    }
+
+    this.stretchedSampleCacheKeysBySampleId.set(sampleId, new Set([cacheKey]));
+  }
+
+  private deleteStretchedSampleBufferCache(sampleId: SampleId): void {
+    const cacheKeys = this.stretchedSampleCacheKeysBySampleId.get(sampleId);
+
+    if (!cacheKeys) {
+      return;
+    }
+
+    for (const cacheKey of cacheKeys) {
+      this.stretchedSampleBufferCache.delete(cacheKey);
+      this.renderingStretchedSampleBuffers.delete(cacheKey);
+    }
+
+    this.stretchedSampleCacheKeysBySampleId.delete(sampleId);
+  }
+
   private async loadSamplesForLoopEvents(
     events: readonly SampleLoopEvent[],
   ): Promise<void> {
@@ -916,6 +1350,94 @@ function createClipLoopEvents({
   ];
 }
 
+function hasStretchedSampleEvents(
+  events: readonly SampleLoopEvent[],
+): boolean {
+  return events.some(isStretchedSampleEvent);
+}
+
+function isStretchedSampleEvent(
+  event: SampleLoopEvent,
+): event is SampleLoopEvent & { stretchRate: number } {
+  return (
+    ENABLE_PITCH_PRESERVING_IMPORTED_AUDIO_STRETCH &&
+    typeof event.stretchRate === "number" &&
+    Number.isFinite(event.stretchRate)
+  );
+}
+
+function isRangedSampleEvent(event: SampleLoopEvent): boolean {
+  return (
+    typeof event.durationTicks === "number" ||
+    typeof event.playbackDurationSeconds === "number" ||
+    typeof event.sourceOffsetSeconds === "number" ||
+    typeof event.stretchRate === "number"
+  );
+}
+
+function isUnityStretchRate(stretchRate: number): boolean {
+  return Math.abs(stretchRate - 1) < 0.000001;
+}
+
+function getStretchedSampleCacheKey(
+  { sampleId, sampleVersion, stretchRate }: {
+    sampleId: SampleId;
+    sampleVersion: number;
+    stretchRate: number;
+  },
+): string {
+  return `${sampleId}\u0000${sampleVersion}\u0000${normalizeStretchRateForCache(
+    stretchRate,
+  )}`;
+}
+
+function normalizeStretchRateForCache(stretchRate: number): string {
+  return stretchRate.toFixed(6);
+}
+
+function trimAudioBufferDuration({
+  audioBuffer,
+  durationSeconds,
+}: {
+  audioBuffer: AudioBuffer;
+  durationSeconds: number;
+}): AudioBuffer {
+  const targetLength = Math.min(
+    audioBuffer.length,
+    Math.max(1, Math.ceil(durationSeconds * audioBuffer.sampleRate)),
+  );
+
+  if (targetLength === audioBuffer.length) {
+    return audioBuffer;
+  }
+
+  const trimmedBuffer = new AudioBuffer({
+    length: targetLength,
+    numberOfChannels: audioBuffer.numberOfChannels,
+    sampleRate: audioBuffer.sampleRate,
+  });
+
+  for (let channelIndex = 0; channelIndex < audioBuffer.numberOfChannels; channelIndex += 1) {
+    trimmedBuffer
+      .getChannelData(channelIndex)
+      .set(audioBuffer.getChannelData(channelIndex).subarray(0, targetLength));
+  }
+
+  return trimmedBuffer;
+}
+
+function createStretchChannelBuffers(
+  audioBuffer: AudioBuffer,
+): [Float32Array, Float32Array] {
+  const left = new Float32Array(audioBuffer.getChannelData(0));
+  const right =
+    audioBuffer.numberOfChannels > 1
+      ? new Float32Array(audioBuffer.getChannelData(1))
+      : new Float32Array(left);
+
+  return [left, right];
+}
+
 function midiNoteToFrequency(midiNote: number): number {
   return 440 * 2 ** ((midiNote - 69) / 12);
 }
@@ -979,4 +1501,19 @@ function getAudioContextConstructor(): AudioContextConstructor {
   }
 
   return AudioContextClass;
+}
+
+function getOfflineAudioContextConstructor(): OfflineAudioContextConstructor {
+  const audioWindow = window as Window &
+    typeof globalThis & {
+      webkitOfflineAudioContext?: OfflineAudioContextConstructor;
+    };
+  const OfflineAudioContextClass =
+    audioWindow.OfflineAudioContext ?? audioWindow.webkitOfflineAudioContext;
+
+  if (!OfflineAudioContextClass) {
+    throw new Error("OfflineAudioContext is not supported in this browser.");
+  }
+
+  return OfflineAudioContextClass;
 }

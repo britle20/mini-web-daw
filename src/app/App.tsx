@@ -45,6 +45,7 @@ import {
   getHybridClipBarCount,
   getHybridClipLengthTicks,
   getClipInstancesOutsideArrangementLength,
+  isValidImportedAudioSourceBpm,
   getPitchedInstrument,
   hasHybridClipEventsOutsideLength,
   hasNoteEventsForPitchedInstrument,
@@ -59,6 +60,7 @@ import {
   removePitchedInstrumentFromClip,
   renameClip,
   toggleDrumSubstep,
+  validateImportedAudioSourceBpm,
   validateImportedWavFile,
   updateMasterMixerState,
   updateDrumLaneSample,
@@ -381,6 +383,9 @@ export function App() {
     }));
   const [playheadTick, setPlayheadTick] = useState<Tick>(0);
   const playheadTickRef = useRef<Tick>(0);
+  const arrangementPlaybackRequestRef = useRef(0);
+  const isBpmAdjustmentActiveRef = useRef(false);
+  const shouldResumeAfterBpmAdjustmentRef = useRef(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [isAudioClipPreviewPlaying, setIsAudioClipPreviewPlaying] =
     useState(false);
@@ -748,13 +753,75 @@ export function App() {
     setPlayheadTick(nextTick);
   }
 
+  function beginArrangementPlaybackRequest(): number {
+    arrangementPlaybackRequestRef.current += 1;
+    return arrangementPlaybackRequestRef.current;
+  }
+
+  function invalidateArrangementPlaybackRequests(): void {
+    arrangementPlaybackRequestRef.current += 1;
+  }
+
+  function isCurrentArrangementPlaybackRequest(requestId: number): boolean {
+    return requestId === arrangementPlaybackRequestRef.current;
+  }
+
   function commitBpm(nextBpm: number) {
     const normalizedBpm = clampTempoBpm(nextBpm);
+    const shouldRestartSongPlayback =
+      !isBpmAdjustmentActiveRef.current &&
+      transportState === "playing" &&
+      transportMode === "song";
+    const fallbackPlayheadTick = playheadTickRef.current;
     const snapshot = audioEngine.setTempoBpm(normalizedBpm);
+    const nextPlayheadTick =
+      shouldRestartSongPlayback && snapshot.status !== "playing"
+        ? fallbackPlayheadTick
+        : snapshot.currentTick;
 
     bpmRef.current = snapshot.tempoBpm;
     setBpm(snapshot.tempoBpm);
+    commitPlayheadTick(nextPlayheadTick);
+
+    if (shouldRestartSongPlayback) {
+      void restartArrangementPlayback(nextPlayheadTick);
+    }
+  }
+
+  function handleBpmAdjustmentStart() {
+    if (isBpmAdjustmentActiveRef.current) {
+      return;
+    }
+
+    isBpmAdjustmentActiveRef.current = true;
+    shouldResumeAfterBpmAdjustmentRef.current = transportState === "playing";
+
+    if (transportState !== "playing") {
+      return;
+    }
+
+    invalidateArrangementPlaybackRequests();
+    stopAudioClipPreview();
+    const snapshot = audioEngine.pauseLoop();
+
+    setTransportState(snapshot.status);
     commitPlayheadTick(snapshot.currentTick);
+    setMixerLevels(createEmptyMixerLevels(arrangementTracks));
+  }
+
+  function handleBpmAdjustmentEnd() {
+    if (!isBpmAdjustmentActiveRef.current) {
+      return;
+    }
+
+    isBpmAdjustmentActiveRef.current = false;
+
+    if (!shouldResumeAfterBpmAdjustmentRef.current) {
+      return;
+    }
+
+    shouldResumeAfterBpmAdjustmentRef.current = false;
+    void resumePlaybackAfterBpmAdjustment();
   }
 
   function commitClipInstances(nextClipInstances: ClipInstance[]) {
@@ -1642,16 +1709,19 @@ export function App() {
     }
   }
 
-  async function handleAudioClipImport(file: File) {
+  async function handleAudioClipImport(file: File, sourceBpm: number) {
     setAudioError(null);
     setClipImportError(null);
     stopAudioClipPreview();
 
     try {
       validateImportedWavFile(file);
+      validateImportedAudioSourceBpm(sourceBpm);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Only WAV files can be imported.";
+        error instanceof Error
+          ? error.message
+          : "Only WAV files with valid source BPM can be imported.";
 
       setClipImportError(message);
       return;
@@ -1682,6 +1752,7 @@ export function App() {
         fileName: file.name,
         mimeType: file.type,
         sampleId,
+        sourceBpm,
       });
       const nextClips = [...clipsRef.current, clip];
       const nextSampleMetas = [...sampleMetasRef.current, sampleMeta];
@@ -2296,6 +2367,18 @@ export function App() {
     }
   }
 
+  function getAudioClipSourceBpm(clip: Clip): number | undefined {
+    if (!isAudioClip(clip)) {
+      return undefined;
+    }
+
+    const sourceBpm = sampleMetasRef.current.find(
+      (sampleMeta) => sampleMeta.id === clip.sampleId,
+    )?.source.sourceBpm;
+
+    return isValidImportedAudioSourceBpm(sourceBpm) ? sourceBpm : undefined;
+  }
+
   function handleArrangementClipDrop({
     clipId,
     startTick,
@@ -2316,6 +2399,7 @@ export function App() {
       existingInstanceIds: clipInstancesRef.current.map(
         (instance) => instance.id,
       ),
+      sourceBpm: getAudioClipSourceBpm(clip),
       startTick,
       tempoBpm: bpmRef.current,
       trackId,
@@ -2470,6 +2554,7 @@ export function App() {
       return;
     }
 
+    invalidateArrangementPlaybackRequests();
     stopAudioClipPreview();
     setMixerLevels(createEmptyMixerLevels(arrangementTracks));
 
@@ -2487,12 +2572,22 @@ export function App() {
     startTick: Tick,
     loopRange = arrangementLoopRangeRef.current,
   ) {
+    const requestId = beginArrangementPlaybackRequest();
+
     try {
       const snapshot = await startArrangementPlayback(startTick, loopRange);
+
+      if (!isCurrentArrangementPlaybackRequest(requestId)) {
+        return;
+      }
 
       setTransportState("playing");
       commitPlayheadTick(snapshot.currentTick);
     } catch (error) {
+      if (!isCurrentArrangementPlaybackRequest(requestId)) {
+        return;
+      }
+
       setTransportState("stopped");
       commitPlayheadTick(audioEngine.stopLoop().currentTick);
       setMixerLevels(createEmptyMixerLevels(arrangementTracks));
@@ -2528,9 +2623,21 @@ export function App() {
       );
     }
 
+    const missingSourceBpmClipNames =
+      getMissingImportedAudioSourceBpmClipNames(currentClipInstances);
+
+    if (missingSourceBpmClipNames.length > 0) {
+      throw new Error(
+        `Source BPM is missing for imported audio clips: ${missingSourceBpmClipNames.join(
+          ", ",
+        )}. Re-import the WAV with a source BPM before arrangement playback.`,
+      );
+    }
+
     const playbackEvents = buildArrangementPlaybackEvents({
       clipInstances: currentClipInstances,
       clips: clipsRef.current,
+      projectBpm: bpmRef.current,
     });
 
     audioEngine.setTrackMixerStates(trackMixerStatesRef.current);
@@ -2564,9 +2671,21 @@ export function App() {
         );
       }
 
+      const missingSourceBpmClipNames =
+        getMissingImportedAudioSourceBpmClipNames(nextClipInstances);
+
+      if (missingSourceBpmClipNames.length > 0) {
+        throw new Error(
+          `Source BPM is missing for imported audio clips: ${missingSourceBpmClipNames.join(
+            ", ",
+          )}. Re-import the WAV with a source BPM before arrangement playback.`,
+        );
+      }
+
       const playbackEvents = buildArrangementPlaybackEvents({
         clipInstances: nextClipInstances,
         clips: nextClips,
+        projectBpm: bpmRef.current,
       });
 
       await audioEngine.updateClipLoopEvents({
@@ -2585,13 +2704,17 @@ export function App() {
   function buildArrangementPlaybackEvents({
     clipInstances: instances,
     clips: sourceClips,
+    projectBpm,
   }: {
     clipInstances: readonly ClipInstance[];
     clips: readonly Clip[];
+    projectBpm: number;
   }) {
     const playbackEvents = expandClipInstancesForPlayback({
       clipInstances: instances,
       clips: sourceClips,
+      projectBpm,
+      sampleMetas: sampleMetasRef.current,
     });
 
     if (playbackEvents.missingClipIds.length > 0) {
@@ -2625,6 +2748,28 @@ export function App() {
     }
 
     return missingClipNames;
+  }
+
+  function getMissingImportedAudioSourceBpmClipNames(
+    instances: readonly ClipInstance[],
+  ): string[] {
+    const missingClipNames: string[] = [];
+
+    for (const instance of instances) {
+      const clip = clipsRef.current.find(
+        (candidate) => candidate.id === instance.clipId,
+      );
+
+      if (!clip || !isAudioClip(clip)) {
+        continue;
+      }
+
+      if (!getAudioClipSourceBpm(clip)) {
+        missingClipNames.push(clip.name);
+      }
+    }
+
+    return Array.from(new Set(missingClipNames));
   }
 
   function getArrangementPlaybackStartTick(
@@ -2670,10 +2815,46 @@ export function App() {
     }
   }
 
+  async function resumePlaybackAfterBpmAdjustment() {
+    const startTick = playheadTickRef.current;
+
+    setAudioError(null);
+    stopAudioClipPreview();
+
+    if (transportMode === "song") {
+      setTransportState("playing");
+      await restartArrangementPlayback(startTick);
+      return;
+    }
+
+    const clip = selectedClipRef.current;
+
+    if (!isHybridClip(clip)) {
+      await handleAudioClipPreviewPlay();
+      return;
+    }
+
+    setTransportState("playing");
+
+    try {
+      const snapshot = await startPatternPlayback(clip, startTick);
+
+      commitPlayheadTick(snapshot.currentTick);
+    } catch (error) {
+      setTransportState("stopped");
+      commitPlayheadTick(audioEngine.stopLoop().currentTick);
+      setAudioError(
+        error instanceof Error ? error.message : "Audio playback failed.",
+      );
+    }
+  }
+
   async function handleTransportStateChange(nextTransportState: TransportState) {
     setAudioError(null);
 
     if (nextTransportState === "stopped") {
+      shouldResumeAfterBpmAdjustmentRef.current = false;
+      invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.stopLoop();
       setTransportState(snapshot.status);
@@ -2683,6 +2864,8 @@ export function App() {
     }
 
     if (nextTransportState === "paused") {
+      shouldResumeAfterBpmAdjustmentRef.current = false;
+      invalidateArrangementPlaybackRequests();
       stopAudioClipPreview();
       const snapshot = audioEngine.pauseLoop();
       setTransportState(snapshot.status);
@@ -2744,6 +2927,8 @@ export function App() {
         isProjectFileProcessing={isProjectFileProcessing}
         isProjectOperationPending={isProjectOperationPending}
         mode={transportMode}
+        onBpmAdjustmentEnd={handleBpmAdjustmentEnd}
+        onBpmAdjustmentStart={handleBpmAdjustmentStart}
         onBpmChange={commitBpm}
         onModeChange={handleTransportModeChange}
         onProjectCreate={handleProjectCreate}

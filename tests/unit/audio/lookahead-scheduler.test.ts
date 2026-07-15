@@ -62,6 +62,50 @@ describe("collectScheduledEventsForWindow", () => {
     ]);
   });
 
+  it("schedules a ranged event that overlaps the playback start", () => {
+    const scheduledEvents = collectScheduledEventsForWindow({
+      audioStartTime: 10,
+      events: [
+        {
+          durationTicks: 960,
+          id: "active-audio",
+          label: "active-audio",
+          scheduleWhenOverlappingStart: true,
+          startTick: 0,
+        },
+      ],
+      startTick: 480,
+      tempoBpm: 120,
+      windowEndTick: 600,
+      windowStartTick: 480,
+    });
+
+    expect(scheduledEvents).toHaveLength(1);
+    expect(scheduledEvents[0]?.absoluteTick).toBe(0);
+    expect(scheduledEvents[0]?.audioTime).toBeCloseTo(9.5);
+  });
+
+  it("does not reschedule overlapping ranged events after the playback start window", () => {
+    const scheduledEvents = collectScheduledEventsForWindow({
+      audioStartTime: 10,
+      events: [
+        {
+          durationTicks: 960,
+          id: "active-audio",
+          label: "active-audio",
+          scheduleWhenOverlappingStart: true,
+          startTick: 0,
+        },
+      ],
+      startTick: 480,
+      tempoBpm: 120,
+      windowEndTick: 840,
+      windowStartTick: 720,
+    });
+
+    expect(scheduledEvents).toHaveLength(0);
+  });
+
   it("wraps absolute ticks to loop ticks", () => {
     expect(getLoopTickAtAbsoluteTick({ absoluteTick: 0 })).toBe(0);
     expect(getLoopTickAtAbsoluteTick({ absoluteTick: 1919 })).toBe(1919);
@@ -171,6 +215,32 @@ describe("LookaheadScheduler", () => {
         scheduledEvent.audioTime,
       ]),
     ).toEqual([["at-start", 480, 10]]);
+  });
+
+  it("can delay transport audio start while keeping the current tick stable", () => {
+    let audioTime = 10;
+    const scheduledEvents: ScheduledTickEvent<TestEvent>[] = [];
+    const scheduler = new LookaheadScheduler<TestEvent>({
+      events: [{ id: "start", label: "start", startTick: 0 }],
+      getAudioTime: () => audioTime,
+      scheduleAheadTime: 0.25,
+      scheduleEvent: (scheduledEvent) => {
+        scheduledEvents.push(scheduledEvent);
+      },
+      setIntervalFn: () => 1,
+      startDelaySeconds: 0.12,
+      tempoBpm: 120,
+    });
+
+    const snapshot = scheduler.start();
+
+    expect(snapshot.currentTick).toBe(0);
+    expect(snapshot.audioStartTime).toBeCloseTo(10.12);
+    expect(scheduledEvents[0]?.audioTime).toBeCloseTo(10.12);
+
+    audioTime = 10.06;
+
+    expect(scheduler.getSnapshot().currentTick).toBe(0);
   });
 
   it("pauses at the current loop tick and resumes from that tick", () => {

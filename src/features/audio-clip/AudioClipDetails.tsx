@@ -65,6 +65,10 @@ export function AudioClipDetails({
           <dt>Source size</dt>
           <dd>{formatByteLength(sampleMeta?.source.byteLength)}</dd>
         </div>
+        <div className={styles.detailItem}>
+          <dt>Source BPM</dt>
+          <dd>{formatSourceBpm(sampleMeta?.source.sourceBpm)}</dd>
+        </div>
       </dl>
 
       <div className={styles.notice}>
@@ -109,4 +113,12 @@ function formatByteLength(byteLength: number | undefined): string {
   }
 
   return `${(byteLength / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function formatSourceBpm(sourceBpm: number | undefined): string {
+  if (typeof sourceBpm !== "number" || !Number.isFinite(sourceBpm)) {
+    return "Missing";
+  }
+
+  return `${sourceBpm.toFixed(2)} BPM`;
 }

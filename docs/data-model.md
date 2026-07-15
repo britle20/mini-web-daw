@@ -240,7 +240,7 @@ export interface AudioClip {
 
 Imported sample metadata should include stable file identity fields when available. `contentHashSha256` identifies the WAV bytes, not decoded audio data.
 
-For BPM-aware imported audio playback, new imported WAV clips should require a user-entered source BPM. Store that value as source media metadata, for example `sourceBpm` on imported sample metadata. The app should not try to infer BPM automatically in the first implementation.
+BPM-aware imported audio playback requires new imported WAV clips to include a user-entered source BPM. Store that value as source media metadata, for example `sourceBpm` on imported sample metadata. The app should not try to infer BPM automatically in the first implementation.
 
 `sourceBpm` is serializable metadata about the source file's intended tempo. It is not an event position, and it does not replace tick-based arrangement placement. Playback derives a stretch rate from `project.tempoBpm / sourceBpm` at scheduling time.
 
@@ -257,7 +257,7 @@ export interface ImportedSampleSource {
 }
 ```
 
-After BPM-aware imported audio is implemented, newly imported WAV clips should have `sourceBpm`. Existing or imported project files may still lack it; those clips should show a clear missing-source-BPM state or provide an edit path before tempo-synced playback.
+Newly imported WAV clips should have `sourceBpm`. Existing or imported project files may still lack it; those clips should show a clear missing-source-BPM state or provide an edit path before tempo-synced playback.
 
 Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
 
@@ -352,7 +352,7 @@ Default instance lengths:
 
 Without time stretching, imported audio playback runs at original speed. If an audio clip instance is shorter than the source, playback is cropped. If it is longer than the source, playback may end naturally and leave silence.
 
-After BPM-aware imported audio playback is implemented, imported WAV clips with valid `sourceBpm` may be pitch-preserving stretched at scheduling time so they follow the project BPM. The source clip and `ClipInstance` still store arrangement positions and lengths in ticks. The runtime audio engine owns decoded buffers and stretch nodes.
+Imported WAV clips with valid `sourceBpm` may be pitch-preserving stretched at scheduling time so they follow the project BPM. The source clip and `ClipInstance` still store arrangement positions and lengths in ticks. The runtime audio engine owns decoded buffers and stretch nodes.
 
 Snap and movement should update tick values, not pixel positions. UI geometry is derived from `startTick`, `lengthTicks`, track order, and timeline constants.
 

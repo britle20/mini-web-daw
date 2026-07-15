@@ -3,7 +3,7 @@
 Related issue: #7
 
 ## Status
-Planned
+Implemented
 
 ## Goal
 
@@ -87,6 +87,16 @@ Examples:
 The first implementation should not update the stretch ratio for already-playing imported audio when the user moves the BPM slider. Stop and start playback again to use the new project BPM.
 
 The local spike found that the stretch node can occasionally fail to start if scheduled too tightly. The production implementation should use a conservative schedule lead time, retry behavior, or another explicit startup guard.
+
+## Implementation notes
+
+- Source BPM is stored on `SampleMeta.source.sourceBpm`.
+- Imported audio arrangement events carry runtime-only `sourceBpm`, `stretchRate`, and `playbackDurationSeconds` values derived from project BPM at playback/event-build time.
+- Live `SONG` playback uses `projectBpm / sourceBpm` to tempo-sync imported audio clips.
+- The target live arrangement path uses `signalsmith-stretch` with `semitones = 0` so imported clips remain pitch-preserving while following project BPM.
+- `AudioBufferSourceNode.playbackRate` remains available as an emergency fallback, but it is not pitch-preserving.
+- `signalsmith-stretch` remains isolated behind `BrowserAudioEngine`; React components do not call the stretch library directly.
+- Offline arrangement WAV export stretch remains deferred to issue #6.
 
 ## Done when
 

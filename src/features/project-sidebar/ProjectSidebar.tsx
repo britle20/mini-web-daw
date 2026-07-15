@@ -10,11 +10,15 @@ import {
 import { Icon } from "../../components";
 import {
   ARRANGEMENT_CLIP_DRAG_TYPE,
+  DEFAULT_IMPORTED_AUDIO_SOURCE_BPM,
+  MAX_IMPORTED_AUDIO_SOURCE_BPM,
+  MIN_IMPORTED_AUDIO_SOURCE_BPM,
   type Clip,
   PITCHED_INSTRUMENTS,
   type PitchedInstrumentId,
   isAudioClip,
   isHybridClip,
+  validateImportedAudioSourceBpm,
 } from "../../model";
 import styles from "./ProjectSidebar.module.css";
 
@@ -43,7 +47,7 @@ interface ProjectSidebarProps {
   onClipAdd: () => void;
   onClipDelete: (clipId: string) => void;
   onClipDuplicate: (clipId: string) => void;
-  onClipImport: (file: File) => void;
+  onClipImport: (file: File, sourceBpm: number) => void;
   onClipImportErrorDismiss: () => void;
   onClipRename: (clipId: string, name: string) => void;
   onClipSelect: (clipId: string) => void;
@@ -99,6 +103,12 @@ export function ProjectSidebar({
     useState<string | null>(null);
   const [renamingClipId, setRenamingClipId] = useState<string | null>(null);
   const [draftClipName, setDraftClipName] = useState("");
+  const [pendingAudioImportFile, setPendingAudioImportFile] =
+    useState<File | null>(null);
+  const [sourceBpmDraft, setSourceBpmDraft] = useState(
+    String(DEFAULT_IMPORTED_AUDIO_SOURCE_BPM),
+  );
+  const [sourceBpmError, setSourceBpmError] = useState<string | null>(null);
   const shouldIgnoreRenameBlurRef = useRef(false);
 
   function handleBuildClipClick() {
@@ -124,7 +134,39 @@ export function ProjectSidebar({
       return;
     }
 
-    onClipImport(file);
+    setPendingAudioImportFile(file);
+    setSourceBpmDraft(String(DEFAULT_IMPORTED_AUDIO_SOURCE_BPM));
+    setSourceBpmError(null);
+  }
+
+  function cancelSourceBpmDialog() {
+    setPendingAudioImportFile(null);
+    setSourceBpmDraft(String(DEFAULT_IMPORTED_AUDIO_SOURCE_BPM));
+    setSourceBpmError(null);
+  }
+
+  function handleSourceBpmSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!pendingAudioImportFile) {
+      return;
+    }
+
+    const sourceBpm = Number(sourceBpmDraft);
+
+    try {
+      validateImportedAudioSourceBpm(sourceBpm);
+    } catch (error) {
+      setSourceBpmError(
+        error instanceof Error
+          ? error.message
+          : "Enter a valid source BPM for the selected WAV.",
+      );
+      return;
+    }
+
+    onClipImport(pendingAudioImportFile, sourceBpm);
+    cancelSourceBpmDialog();
   }
 
   function handleProjectJsonExportClick() {
@@ -647,6 +689,74 @@ export function ProjectSidebar({
           </div>
         ) : null}
       </div>
+
+      {pendingAudioImportFile ? (
+        <div
+          aria-labelledby="source-bpm-dialog-title"
+          aria-modal="true"
+          className={styles.sourceBpmDialogBackdrop}
+          role="dialog"
+        >
+          <form
+            className={styles.sourceBpmDialog}
+            onSubmit={handleSourceBpmSubmit}
+          >
+            <div className={styles.sourceBpmDialogHeader}>
+              <div>
+                <p className={styles.sectionLabel}>Imported WAV</p>
+                <h3
+                  className={styles.sourceBpmDialogTitle}
+                  id="source-bpm-dialog-title"
+                >
+                  Source BPM
+                </h3>
+              </div>
+              <button
+                aria-label="Cancel audio import"
+                className={styles.iconButton}
+                onClick={cancelSourceBpmDialog}
+                type="button"
+              >
+                <Icon name="close" />
+              </button>
+            </div>
+            <p className={styles.sourceBpmDialogText}>
+              Enter the original tempo for {pendingAudioImportFile.name}. The app
+              uses this to stretch imported audio clips to the project BPM.
+            </p>
+            <label className={styles.sourceBpmField}>
+              <span>Source BPM</span>
+              <input
+                autoFocus
+                max={MAX_IMPORTED_AUDIO_SOURCE_BPM}
+                min={MIN_IMPORTED_AUDIO_SOURCE_BPM}
+                onChange={(event) => {
+                  setSourceBpmDraft(event.target.value);
+                  setSourceBpmError(null);
+                }}
+                step="0.01"
+                type="number"
+                value={sourceBpmDraft}
+              />
+            </label>
+            {sourceBpmError ? (
+              <p className={styles.sourceBpmError}>{sourceBpmError}</p>
+            ) : null}
+            <div className={styles.sourceBpmActions}>
+              <button
+                className={styles.sourceBpmSecondaryButton}
+                onClick={cancelSourceBpmDialog}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button className={styles.sourceBpmPrimaryButton} type="submit">
+                Import WAV
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </aside>
   );
 }
