@@ -4,24 +4,20 @@
 
 Create a browser-first, clip-oriented mini DAW that is useful for making electronic music. The app should favor correct timing, serializable project data, and focused workflows over broad full-DAW scope.
 
-## Current Milestone: Sidebar Clip List UX
+## Current Milestone: BPM-Aware Imported Audio WAV Export
 
-The current next task is a focused sidebar UX cleanup before returning to larger feature work.
+The current next task is to make arrangement WAV export match BPM-aware imported audio playback.
 
 Focus:
 
-- Keep clip lists scannable as projects gain more clips and instruments.
-- Collapse clip instrument lists by default while preserving manual expand/collapse behavior.
-- Avoid changing project data shape for UI-only state.
+- Use imported audio source BPM metadata during arrangement WAV export.
+- Preserve pitch while matching `projectBpm / sourceBpm` timing.
+- Keep export rendering independent from live transport and React UI state.
+- Fail clearly when imported sample bytes, source BPM metadata, or stretch runtime support is missing.
 
 ## Active Issue Order
 
-1. #9 Collapse clip instrument lists by default -> focused UX issue
-2. #4 Custom project management dialogs -> `docs/features/24-custom-project-management-dialogs.md`
-3. #3 Clip duplication -> `docs/features/25-clip-duplication.md`
-4. #5 Project JSON and bundle export/import -> `docs/features/26-project-json-and-bundle-export-import.md`
-5. #7 BPM-aware imported audio clip playback -> `docs/features/27-bpm-aware-imported-audio-playback.md`
-6. #6 BPM-aware imported audio stretch during WAV export -> `docs/features/28-bpm-aware-imported-audio-wav-export.md`
+1. #6 BPM-aware imported audio stretch during WAV export -> `docs/features/28-bpm-aware-imported-audio-wav-export.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 

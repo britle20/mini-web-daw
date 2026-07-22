@@ -1807,6 +1807,7 @@ export function App() {
         clips: clipsRef.current,
         importedSampleBlobs,
         masterMixerState: masterMixerStateRef.current,
+        sampleMetas: sampleMetasRef.current,
         tempoBpm: bpmRef.current,
         trackMixerStates: trackMixerStatesRef.current,
       });
