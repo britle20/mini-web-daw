@@ -27,7 +27,7 @@ The initial transport UI range is 60 to 180 BPM. Implementations should validate
 - `Project`: top-level serializable project document.
 - `ProjectSummary`: lightweight local project list item.
 - `ProjectCollectionState`: browser-local project collection metadata such as the active project ID.
-- `Track`: a lane that can contain clip instances.
+- `Track`: a stable arrangement lane that can contain clip instances.
 - `Clip`: reusable musical content. It may be a hybrid MIDI/drum clip or, later, an imported audio clip.
 - `ClipInstance`: placement of a clip on a track in arrangement time.
 - `AudioClip`: reusable clip content that references imported audio metadata.
@@ -261,7 +261,7 @@ export interface ImportedSampleSource {
 
 Newly imported WAV clips should have `sourceBpm`. Existing or imported project files may still lack it; those clips should show a clear missing-source-BPM state or provide an edit path before tempo-synced playback.
 
-Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
+Arrangement clip trim and fade editing should be non-destructive. The arrangement stores trim/fade decisions on `ClipInstance`, for example `lengthTicks`, optional `sourceOffsetSeconds`, `fadeInTicks`, and `fadeOutTicks`, instead of modifying the source clip, imported audio clip, or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
 
 Arrangement multi-clip selection should not change the `ClipInstance` shape. Selected instance IDs, selection marquee geometry, last arrangement edit position, and app-local arrangement clipboard contents are runtime UI state. Copy/paste creates new serializable `ClipInstance` objects with new IDs and references the same source `clipId`; it must not duplicate source clips or store clipboard data in project JSON.
 
@@ -304,6 +304,7 @@ The arrangement view places reusable clips on tracks using `ClipInstance` object
 - Where it starts in arrangement ticks.
 - How long the placed instance lasts in arrangement ticks.
 - Optional source offset for audio clips.
+- Optional fade-in and fade-out durations in arrangement ticks.
 
 `ArrangementState` owns arrangement-level song settings such as:
 
@@ -328,6 +329,8 @@ export interface ClipInstance {
   startTick: Tick;
   lengthTicks: Tick;
   sourceOffsetSeconds?: number;
+  fadeInTicks?: Tick;
+  fadeOutTicks?: Tick;
 }
 
 export interface ArrangementLoopRange {
@@ -359,6 +362,18 @@ Without time stretching, imported audio playback runs at original speed. If an a
 Imported WAV clips with valid `sourceBpm` may be pitch-preserving stretched at scheduling time so they follow the project BPM. The source clip and `ClipInstance` still store arrangement positions and lengths in ticks. The runtime audio engine owns decoded buffers and stretch nodes.
 
 Snap and movement should update tick values, not pixel positions. UI geometry is derived from `startTick`, `lengthTicks`, track order, and timeline constants.
+
+Clip-instance trim should not delete source clip events or rewrite imported audio bytes. For hybrid clips, trim limits which drum and note events are visible and playable in the placed instance window. For imported audio clips, start trim may advance `sourceOffsetSeconds`; end trim reduces `lengthTicks`. Fade durations should be stored as tick values on the `ClipInstance` and applied as runtime gain ramps during `SONG` playback and arrangement WAV export.
+
+## Arrangement Track Management
+
+Arrangement tracks are serializable project data. Track order is the order of the `tracks` array, but track identity must come from stable `trackId` values rather than array indexes.
+
+Track rename and reorder operations should preserve `trackId` so existing `ClipInstance.trackId`, mixer settings, effect settings, and playback routing stay attached to the intended track.
+
+Deleting a track with placed clip instances or meaningful mixer/effect state should require explicit confirmation. The first deletion policy is to remove the deleted track and the clip instances owned by that track after confirmation. It should not silently move clip instances to another track.
+
+The app should keep at least one arrangement track available unless a later feature explicitly supports zero-track projects. Runtime mixer nodes and meters for removed tracks must be cleaned up by the audio engine and must not be serialized.
 
 ## Bundled Drum Sample Naming and Display
 
@@ -663,6 +678,8 @@ export interface ClipInstance {
   startTick: Tick;
   lengthTicks: Tick;
   sourceOffsetSeconds?: number;
+  fadeInTicks?: Tick;
+  fadeOutTicks?: Tick;
 }
 
 export interface ArrangementState {

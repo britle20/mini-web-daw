@@ -15,6 +15,8 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Display audio state such as stopped, playing, paused, and playhead position.
 - Render song-level UI shells such as arrangement and mixer panels.
 - Let users place, move, select, and delete arrangement clip instances.
+- Let users trim and fade placed arrangement clip instances.
+- Let users create, rename, delete, and reorder arrangement tracks.
 - Let users adjust clip and arrangement lengths through model-backed controls.
 - Dispatch mixer control edits such as volume, mute, solo, and master volume.
 - Trigger save, restore, import, and export workflows through persistence/audio APIs.
@@ -30,6 +32,8 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Store clip length and arrangement length as serializable musical values.
 - Store project identity and project metadata separately from runtime UI selection.
 - Provide pure transformations for creating, moving, and deleting arrangement clip instances.
+- Provide pure transformations for trimming and fading arrangement clip instances.
+- Provide pure transformations for creating, renaming, deleting, and reordering tracks while preserving stable track IDs.
 - Store serializable mixer settings such as track volume, mute, solo, master volume, and effect settings when mixer routing exists.
 - Avoid references to Web Audio runtime objects.
 
@@ -40,7 +44,9 @@ The main rule is separation of concerns: UI rendering, persistence, and audio sc
 - Store runtime-only decoded sample data.
 - Schedule audio against `AudioContext.currentTime`.
 - Schedule arrangement playback from placed clip instances when `SONG` mode is active.
+- Apply clip-instance trim and fade settings during arrangement playback.
 - Own mixer routing, track gain nodes, master gain, runtime meters, and effect nodes when those features exist.
+- Rebuild or clean up runtime track routing when the serializable track list changes.
 - Provide an offline rendering path for arrangement WAV export when that feature exists.
 - Expose a small typed API to the UI and feature code.
 - Never depend on React components.
@@ -92,7 +98,7 @@ src/
 
 ## Runtime vs Serializable Data
 
-Serializable data includes projects, tracks, clips, clip instances, drum events, note events, sample metadata, tempo, time signature, clip length, arrangement length, arrangement loop ranges, and mixer settings.
+Serializable data includes projects, ordered tracks, clips, clip instances, clip-instance trim/fade settings, drum events, note events, sample metadata, tempo, time signature, clip length, arrangement length, arrangement loop ranges, and mixer settings.
 
 Runtime data includes `AudioContext`, `AudioBuffer`, audio nodes, scheduler timers, decoded sample caches, and currently playing source nodes. Runtime data must not be written into project JSON.
 

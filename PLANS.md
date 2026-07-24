@@ -4,9 +4,9 @@
 
 Create a browser-first, clip-oriented mini DAW that is useful for making electronic music. The app should favor correct timing, serializable project data, and focused workflows over broad full-DAW scope.
 
-## Current Milestone: Post-Stretch Cleanup and Synth Instrument Presets
+## Current Milestone: Editing Foundations
 
-The current queue is focused on cleaning up the temporary Signalsmith spike documentation after adopting stretch support, then expanding the piano roll's built-in oscillator instrument palette.
+The current queue is focused on cleaning up adopted spike notes, expanding editing tools, and making arrangement-level structure more usable.
 
 Focus:
 
@@ -17,6 +17,8 @@ Focus:
 - Add multi-clip arrangement editing so song sections can be moved, deleted, and copied as groups.
 - Add undo/redo history before editing operations become too easy to lose.
 - Add velocity editing for drum and piano roll events.
+- Add non-destructive trim and fade editing for placed arrangement clips.
+- Add arrangement track management for creating, renaming, deleting, and reordering tracks.
 - Keep synth preset metadata serializable and runtime Web Audio nodes inside the audio engine.
 
 ## Active Issue Order
@@ -27,6 +29,8 @@ Focus:
 4. #20 Add arrangement multi-clip selection and clipboard editing -> `docs/features/31-arrangement-multi-clip-editing.md`
 5. #22 Add undo and redo history -> `docs/features/32-undo-redo-history.md`
 6. #21 Add velocity editing for drum and piano roll events -> `docs/features/33-velocity-editing.md`
+7. #23 Add clip trim and fade editing -> `docs/features/34-clip-trim-and-fade.md`
+8. #24 Add arrangement track management -> `docs/features/35-track-management.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -65,7 +69,7 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 
 - Keyboard shortcuts for transport and editing.
 - Advanced piano roll commands such as transpose, nudge, duplicate, repeat, and group resize.
-- Advanced arrangement commands such as time selection editing, persistent clip groups, split, trim, stretch, consolidate, and duplicate shortcuts.
+- Advanced arrangement commands such as time selection editing, persistent clip groups, split, stretch, consolidate, and duplicate shortcuts.
 - Starter project template.
 - Metronome.
 - Quantize utilities.

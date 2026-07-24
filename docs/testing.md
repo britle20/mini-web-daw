@@ -24,7 +24,10 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Clip collection and sidebar membership transformations: unit tests.
 - Arrangement clip instance creation, movement, deletion, and snapping: unit tests.
 - Arrangement multi-clip selection, group movement, group deletion, bounds clamping, and app-local copy/paste transforms: unit tests where practical.
+- Clip-instance trim/fade transforms, clamping, and source-offset calculations: unit tests.
+- Track create, rename, delete, reorder, and selection fallback transforms: unit tests.
 - Arrangement scheduler event expansion from clip instances: unit tests where practical.
+- Arrangement scheduler/export planning for clip-instance trim/fade: unit tests where practical.
 - IndexedDB persistence adapters, migrations, and serialization boundaries: unit or integration tests with mocked storage where practical.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
 - Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
@@ -89,6 +92,12 @@ tests/unit/utils/tick-time.test.ts
 - Arrangement clip placement snapping.
 - Arrangement clip move/delete behavior.
 - Arrangement multi-clip group movement, bounds clamping, group delete, and app-local copy/paste behavior.
+- Clip-instance trim and fade boundary handling.
+- Imported audio source offset calculations during start trim.
+- Fade ramp behavior during live playback and arrangement WAV export.
+- Track creation, deletion, rename, and reorder behavior.
+- Stable `trackId` preservation after track reorder.
+- Deleting tracks with clip instances or mixer/effect state.
 - Arrangement playback event expansion across clip instance offsets.
 - Arrangement playhead behavior during play, pause, resume, and stop.
 - Sample start offsets, optional sustain loop points, and note release behavior.
@@ -152,7 +161,9 @@ Manual audio checks should verify:
 - BPM-aware imported audio checks should verify source BPM input, equal-BPM unchanged playback, higher/lower project BPM stretch, pitch preservation, and next-playback-only behavior after BPM changes.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
 - Arrangement multi-clip checks should verify Ctrl/Cmd-click toggling, box selection, selected-clip visual state, group drag movement, group delete, app-local copy/paste, and group-level clamping at timeline and track bounds.
+- Clip trim/fade checks should verify trimming both edges, adding fade-in/fade-out, clamping handles, persistence after refresh, and parity between live playback and WAV export.
 - Imported audio clip arrangement checks should verify clear missing-source behavior after refresh until imported file persistence exists.
+- Track management checks should verify adding, renaming, deleting, and reordering tracks with and without placed clips, then confirming arrangement playback, mixer routing, and export still target the intended tracks.
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
 - Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.
 - Clip duplication checks should verify duplicating hybrid and audio clips, editing duplicates without mutating sources, no automatic arrangement placement creation, and persistence after refresh.

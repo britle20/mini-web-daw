@@ -77,6 +77,7 @@ Arrangement playback should:
 - Expand hybrid clip note events to `clipInstance.startTick + noteEvent.startTick`.
 - Schedule audio clips at `clipInstance.startTick` when their runtime sample data is available.
 - Respect `clipInstance.lengthTicks` as the visible and playable duration boundary.
+- Apply `ClipInstance` fade-in and fade-out settings as scheduled gain ramps.
 - Keep play, pause, resume, and stop behavior separate from React render timing.
 
 Arrangement playback derives its outer bounds from arrangement state, specifically `arrangementLengthBars` and the normalized loop range. Avoid reintroducing fixed 16-bar playback assumptions.
@@ -88,6 +89,8 @@ The arrangement view may set loop start and loop end at bar boundaries. `SONG` p
 Imported audio clips use source BPM metadata and project BPM for pitch-preserving stretch when scheduled from `SONG` mode. If an audio clip instance is shorter than the stretched source buffer, playback should be cropped. If the instance is longer than the stretched source buffer, playback may end naturally and leave silence. If runtime file data or source BPM metadata is missing after refresh, the engine should report a clear missing-source error rather than silently failing.
 
 `SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched imported audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
+
+Arrangement clip trim and fade settings are clip-instance playback metadata. Start/end trim should affect which part of the placed instance is scheduled. Imported audio start trim may use `sourceOffsetSeconds` to start inside the source media. Fade durations such as `fadeInTicks` and `fadeOutTicks` should be converted to seconds at scheduling time and applied with `GainNode` automation before track mixer gain.
 
 Arrangement playback still uses the lookahead scheduler. UI drag state, arrangement DOM geometry, visual playheads, decoded buffers, and active source nodes remain runtime-only.
 
@@ -106,6 +109,7 @@ The current first export pass:
 - Includes arranged hybrid clip drums, `Default Synth` notes, Iowa Piano sampled notes, imported audio clips, track volume, track mute/solo, and master gain.
 - Applies event velocity to drum hits and pitched notes before mixer gain.
 - Crops imported audio clip playback to the placed `ClipInstance.lengthTicks`; if the source ends first, the remaining placement renders silence.
+- Applies clip-instance fade-in and fade-out ramps before track and master mixer gain.
 - Blocks with a clear error when required imported sample data is missing.
 - Avoids mutating live transport state, active source nodes, or decoded runtime caches during rendering.
 
@@ -135,6 +139,8 @@ scheduled source
 ```
 
 Track gain nodes should be keyed by stable `trackId`. When arrangement playback schedules a drum sample, synth note, sample-based note, or audio clip source, that source should connect to the appropriate track channel instead of directly to the destination.
+
+Track creation, deletion, rename, and reorder are model/UI operations, but the audio engine must tolerate the resulting track list changing between playback runs. Runtime routing should be rebuilt or cleaned up by stable `trackId`; array index positions are not stable routing identity.
 
 Mixer settings such as `volumeDb`, `muted`, `solo`, and master `volumeDb` are serializable model data. Web Audio nodes, analyser nodes, meter buffers, active source nodes, and the routing graph are runtime-only audio-engine data.
 

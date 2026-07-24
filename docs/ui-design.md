@@ -149,6 +149,35 @@ Arrangement multi-clip editing should operate on placed `ClipInstance` objects:
 
 Arrangement copy/paste should create new clip instance IDs and preserve references to existing source clips and imported sample metadata. Do not use the OS clipboard or persist arrangement clipboard state in project data for the first version.
 
+## Arrangement Clip Trim and Fade
+
+Placed arrangement clips should support non-destructive trim and fade editing from the clip block itself.
+
+- Show compact start/end trim handles at the left and right edges of each placed clip.
+- Show fade-in and fade-out handles or an equivalent compact visual affordance near the clip edges.
+- Render fade state as a subtle overlay or curve inside the clip block.
+- Keep the source clip name readable while handles are visible.
+- Use semantic buttons or pointer targets with accessible labels where practical.
+- Snap trim movement to the existing arrangement grid unless a feature introduces free trim.
+- Do not show a destructive audio-file editing UI; trim/fade edits belong to the placed `ClipInstance`.
+- Do not fill the full arrangement lane to represent fades. Keep the visual state local to the clip block.
+
+Inline styles are acceptable for dynamic trim/fade geometry because positions and widths are derived from ticks and the current arrangement grid.
+
+## Track Management
+
+Arrangement track controls should live in the arrangement view, near the track header column or arrangement toolbar.
+
+- Provide a compact add-track control.
+- Allow track renaming without leaving the arrangement view.
+- Allow track deletion with a custom destructive confirmation when the track contains clips or meaningful mixer/effect state.
+- Allow vertical track reordering through a clear drag handle or compact move controls.
+- Keep track names, clip lanes, and mixer strips aligned after reorder.
+- Preserve visible selection and focus states during track edits.
+- Keep at least one track visible in the first implementation.
+
+Track management should not redesign the mixer panel. The mixer should follow the current serializable track order and keep stable track settings attached to stable `trackId` values.
+
 ## Clip Length Controls
 
 Hybrid clip editors expose a compact length control for 1, 2, and 4 bars.
