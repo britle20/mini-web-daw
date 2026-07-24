@@ -326,6 +326,10 @@ Initial options:
 - `Default Synth`: oscillator-based playback.
 - `Iowa Piano`: sample-based playback using bundled Iowa Piano WAV files.
 
+Additional built-in oscillator synth presets should appear in this same picker after they are approved. They should not require a separate synth browser or patch editor in the first implementation.
+
+During implementation, temporary audition candidates may be exposed in a feature branch so the user can listen and choose. Rejected candidates should not remain visible in the final UI.
+
 Pitched instruments should appear as selectable clip child items in the left project sidebar, alongside the drum lane entry. Selecting a pitched instrument changes which instrument's note events are visible and editable in the piano roll.
 
 Changing the selected pitched instrument should not mutate existing `NoteEvent` timing or pitch data. Note events belong to a specific pitched instrument by serializable `instrumentId`, so `Default Synth` and `Iowa Piano` notes may coexist in the same clip and can play at the same time.

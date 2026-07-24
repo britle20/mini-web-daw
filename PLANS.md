@@ -4,20 +4,21 @@
 
 Create a browser-first, clip-oriented mini DAW that is useful for making electronic music. The app should favor correct timing, serializable project data, and focused workflows over broad full-DAW scope.
 
-## Current Milestone: BPM-Aware Imported Audio WAV Export
+## Current Milestone: Post-Stretch Cleanup and Synth Instrument Presets
 
-The current next task is to make arrangement WAV export match BPM-aware imported audio playback.
+The current queue is focused on cleaning up the temporary Signalsmith spike documentation after adopting stretch support, then expanding the piano roll's built-in oscillator instrument palette.
 
 Focus:
 
-- Use imported audio source BPM metadata during arrangement WAV export.
-- Preserve pitch while matching `projectBpm / sourceBpm` timing.
-- Keep export rendering independent from live transport and React UI state.
-- Fail clearly when imported sample bytes, source BPM metadata, or stretch runtime support is missing.
+- Fold useful Signalsmith Stretch spike findings into permanent docs.
+- Remove the temporary `docs/spikes/` directory after its durable context is preserved.
+- Add useful oscillator-based synth instrument presets through an audition-and-select workflow.
+- Keep synth preset metadata serializable and runtime Web Audio nodes inside the audio engine.
 
 ## Active Issue Order
 
-1. #6 BPM-aware imported audio stretch during WAV export -> `docs/features/28-bpm-aware-imported-audio-wav-export.md`
+1. #16 Docs: fold Signalsmith spike notes into permanent docs -> docs cleanup, no feature spec
+2. #17 Add oscillator synth instrument presets -> `docs/features/29-oscillator-synth-instrument-presets.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -63,6 +64,7 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 - Swing or groove timing after strict timing is reliable.
 - MIDI file import or export.
 - Improved sampler sustain authoring and tuning UI.
+- User-created synth patch editing.
 - More complete effect slots and effect parameter persistence.
 
 ## Frozen / Not Now

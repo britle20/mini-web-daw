@@ -104,6 +104,7 @@ tests/unit/utils/tick-time.test.ts
 - Imported sample hash matching and relinking.
 - WAV export duration and missing-source failure behavior.
 - WAV export behavior for BPM-aware imported audio clips.
+- Oscillator synth preset metadata, lookup, and live/export playback parity.
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
@@ -131,6 +132,7 @@ Manual audio checks should verify:
 - When sampler sustain metadata exists, long sample-based notes should sustain without obvious repeated attacks as much as the sample material allows.
 - If sampler sustain metadata is missing or invalid, sample-based notes should fall back to one-shot playback rather than stuck or unstable sustain.
 - Instrument switching changes piano roll playback sound without mutating existing note events.
+- Oscillator synth preset checks should verify that approved presets can be added to clips, sound distinct in `PAT` and `SONG` playback, render in arrangement WAV export, and rejected audition candidates are absent from the final UI.
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.
 - Functional mixer checks should verify track faders, master fader, mute, solo, and level meters affect real `SONG` playback.

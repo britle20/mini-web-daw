@@ -470,9 +470,41 @@ Initial pitched instrument IDs:
 - `default-synth`: oscillator-based playback. It can hold notes for arbitrary durations.
 - `iowa-piano`: sample-based playback using bundled Iowa Piano WAV files.
 
+Future built-in oscillator instruments should use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects.
+
 Instrument selection may start as selected-clip or runtime UI state during early M1 work. If it becomes part of saved project behavior, store only serializable IDs and metadata, not runtime audio objects.
 
 Each `NoteEvent` stores the serializable `instrumentId` that owns that note. This allows multiple pitched instruments, such as `Default Synth` and `Iowa Piano`, to have notes at the same tick and pitch inside one hybrid clip and play simultaneously.
+
+Built-in oscillator synth presets may define oscillator, envelope, and optional filter settings:
+
+```ts
+export interface SynthPresetMeta {
+  oscillator: SynthOscillatorMeta;
+  envelope: SynthEnvelopeMeta;
+  filter?: SynthFilterMeta;
+}
+
+export interface SynthOscillatorMeta {
+  type: "sine" | "square" | "sawtooth" | "triangle";
+  detuneCents?: number;
+  gain?: number;
+}
+
+export interface SynthEnvelopeMeta {
+  attackSeconds: number;
+  releaseSeconds: number;
+  sustainGain?: number;
+}
+
+export interface SynthFilterMeta {
+  type: "lowpass" | "highpass";
+  frequencyHz: number;
+  q?: number;
+}
+```
+
+The exact implementation may refine these fields, but the boundary should stay the same: project data stores serializable preset IDs and numeric parameters; the audio engine creates `OscillatorNode`, `BiquadFilterNode`, and `GainNode` instances at runtime.
 
 Iowa Piano can use sample zones to map MIDI notes to bundled samples and optional sustain loop metadata:
 
@@ -481,7 +513,32 @@ export interface PitchedInstrumentMeta {
   id: "default-synth" | "iowa-piano" | string;
   name: string;
   kind: "synth" | "sample";
+  synthPreset?: SynthPresetMeta;
   zones?: SampleZone[];
+}
+
+export interface SynthPresetMeta {
+  oscillator: SynthOscillatorMeta;
+  envelope: SynthEnvelopeMeta;
+  filter?: SynthFilterMeta;
+}
+
+export interface SynthOscillatorMeta {
+  type: "sine" | "square" | "sawtooth" | "triangle";
+  detuneCents?: number;
+  gain?: number;
+}
+
+export interface SynthEnvelopeMeta {
+  attackSeconds: number;
+  releaseSeconds: number;
+  sustainGain?: number;
+}
+
+export interface SynthFilterMeta {
+  type: "lowpass" | "highpass";
+  frequencyHz: number;
+  q?: number;
 }
 
 export interface SampleZone {

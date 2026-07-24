@@ -230,6 +230,26 @@ This is not a full sampler instrument. Bundled pitched sample metadata can exist
 
 The oscillator instrument should be kept as `Default Synth` when sample-based pitched instruments are added. It is useful as a reliable fallback because it can sustain notes for arbitrary durations without sample loop metadata.
 
+## Oscillator Synth Presets
+
+Additional built-in synth instruments may reuse the oscillator note path with different serializable preset metadata.
+
+Synth preset playback should:
+
+- Look up the selected pitched instrument by `instrumentId`.
+- Read serializable oscillator, envelope, and optional filter settings.
+- Create runtime oscillator, gain, and filter nodes inside the audio engine.
+- Convert `midiNote` to oscillator frequency at scheduling time.
+- Convert `durationTicks` to seconds using tempo and PPQ.
+- Schedule note start and stop against `AudioContext.currentTime`.
+- Apply a gain envelope to avoid clicks.
+- Route the source through the current mixer path when playing in `SONG` mode.
+- Use equivalent offline nodes during arrangement WAV export.
+
+Do not render oscillator presets to bundled WAV files for the first pass. Do not store `OscillatorNode`, `BiquadFilterNode`, `GainNode`, or generated PCM buffers in project JSON.
+
+When adding new synth presets, the implementation may temporarily expose candidate sounds for user audition. Rejected candidates should be removed before the PR is finalized so the app keeps only useful named instruments.
+
 ## Sample-based Pitched Playback
 
 Iowa Piano should be a separate pitched instrument from `Default Synth`. It should use the bundled C4-C5 Iowa Piano WAV files when the piano roll note pitch has a matching sample.
@@ -366,6 +386,7 @@ The UI may render a vertical playhead over the piano roll or drum sequencer by c
 
 - Sampler instrument.
 - Synth instruments.
+- User-created synth patch editing.
 - More advanced mixer routing such as pan, sends, buses, automation, and recording arm.
 - More advanced effects such as reverb, multiple slots, chains, presets, and automation.
 - Offline/export rendering later.
