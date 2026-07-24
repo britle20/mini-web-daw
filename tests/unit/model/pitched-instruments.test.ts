@@ -118,6 +118,11 @@ describe("pitched instruments", () => {
       },
     });
     expect(getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT)).toMatchObject({
+      accent: {
+        decaySeconds: 0.08,
+        filterPeakMultiplier: 1.35,
+        gainMultiplier: 1.55,
+      },
       envelope: {
         attackSeconds: 0.002,
         releaseSeconds: 0.045,
@@ -133,6 +138,10 @@ describe("pitched instruments", () => {
         decaySeconds: 0.16,
         peakFrequencyHz: 4200,
         sustainFrequencyHz: 520,
+      },
+      glide: {
+        startSemitoneOffset: -7,
+        timeSeconds: 0.055,
       },
       oscillator: {
         gain: 0.74,

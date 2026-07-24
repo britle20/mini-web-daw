@@ -15,10 +15,18 @@ export interface PitchedInstrumentMeta {
 }
 
 export interface SynthPresetMeta {
+  accent?: SynthAccentMeta;
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
   filterEnvelope?: SynthFilterEnvelopeMeta;
+  glide?: SynthGlideMeta;
   oscillator: SynthOscillatorMeta;
+}
+
+export interface SynthAccentMeta {
+  decaySeconds: number;
+  filterPeakMultiplier?: number;
+  gainMultiplier: number;
 }
 
 export interface SynthOscillatorMeta {
@@ -46,6 +54,11 @@ export interface SynthFilterEnvelopeMeta {
   decaySeconds: number;
   peakFrequencyHz: number;
   sustainFrequencyHz?: number;
+}
+
+export interface SynthGlideMeta {
+  startSemitoneOffset: number;
+  timeSeconds: number;
 }
 
 export interface SampleZone {
@@ -138,6 +151,11 @@ export const AUDITION_ACID_LEAD_INSTRUMENT = {
   kind: "synth",
   name: "Audition Acid Lead",
   synthPreset: {
+    accent: {
+      decaySeconds: 0.08,
+      filterPeakMultiplier: 1.35,
+      gainMultiplier: 1.55,
+    },
     envelope: {
       attackSeconds: 0.002,
       releaseSeconds: 0.045,
@@ -153,6 +171,10 @@ export const AUDITION_ACID_LEAD_INSTRUMENT = {
       decaySeconds: 0.16,
       peakFrequencyHz: 4200,
       sustainFrequencyHz: 520,
+    },
+    glide: {
+      startSemitoneOffset: -7,
+      timeSeconds: 0.055,
     },
     oscillator: {
       gain: 0.74,

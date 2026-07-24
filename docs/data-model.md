@@ -510,10 +510,18 @@ Built-in oscillator synth presets may define oscillator, envelope, and optional 
 
 ```ts
 export interface SynthPresetMeta {
+  accent?: SynthAccentMeta;
   oscillator: SynthOscillatorMeta;
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
   filterEnvelope?: SynthFilterEnvelopeMeta;
+  glide?: SynthGlideMeta;
+}
+
+export interface SynthAccentMeta {
+  decaySeconds: number;
+  filterPeakMultiplier?: number;
+  gainMultiplier: number;
 }
 
 export interface SynthOscillatorMeta {
@@ -539,6 +547,11 @@ export interface SynthFilterEnvelopeMeta {
   decaySeconds: number;
   peakFrequencyHz: number;
   sustainFrequencyHz?: number;
+}
+
+export interface SynthGlideMeta {
+  startSemitoneOffset: number;
+  timeSeconds: number;
 }
 ```
 

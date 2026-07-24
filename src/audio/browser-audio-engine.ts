@@ -32,8 +32,10 @@ import {
   normalizeTrackMixerState,
   type MasterMixerState,
   type SampleZone,
+  type SynthAccentMeta,
   type SynthFilterEnvelopeMeta,
   type SynthFilterMeta,
+  type SynthGlideMeta,
   type SynthPresetMeta,
   type TrackId,
   type TrackMixerState,
@@ -938,10 +940,20 @@ export class BrowserAudioEngine implements AudioEngine {
       DEFAULT_SYNTH_GAIN *
       (synthPreset.oscillator.gain ?? 1) *
       (event.gain ?? 1);
+    const accentPeakGainValue = getSynthAccentPeakGainValue({
+      accent: synthPreset.accent,
+      peakGainValue,
+    });
+    const accentEndTime = getSynthAccentEndTime({
+      accent: synthPreset.accent,
+      attackEndTime,
+      sustainEndTime,
+    });
     const sustainGainValue =
       peakGainValue * (synthPreset.envelope.sustainGain ?? 1);
     const filterNode = createSynthFilterNode({
       audioContext,
+      accent: synthPreset.accent,
       filter: synthPreset.filter,
       filterEnvelope: synthPreset.filterEnvelope,
       durationSeconds,
@@ -957,18 +969,21 @@ export class BrowserAudioEngine implements AudioEngine {
     };
 
     sourceNode.type = synthPreset.oscillator.type;
-    sourceNode.frequency.setValueAtTime(
-      midiNoteToFrequency(event.midiNote),
+    scheduleSynthPitch({
+      frequencyParam: sourceNode.frequency,
+      glide: synthPreset.glide,
       startTime,
-    );
+      targetFrequencyHz: midiNoteToFrequency(event.midiNote),
+    });
     sourceNode.detune.setValueAtTime(
       synthPreset.oscillator.detuneCents ?? 0,
       startTime,
     );
 
     gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(peakGainValue, attackEndTime);
-    gainNode.gain.linearRampToValueAtTime(sustainGainValue, sustainEndTime);
+    gainNode.gain.linearRampToValueAtTime(accentPeakGainValue, attackEndTime);
+    gainNode.gain.linearRampToValueAtTime(sustainGainValue, accentEndTime);
+    gainNode.gain.setValueAtTime(sustainGainValue, sustainEndTime);
     gainNode.gain.linearRampToValueAtTime(0, stopTime);
 
     if (filterNode) {
@@ -1488,12 +1503,14 @@ function createStretchChannelBuffers(
 
 function createSynthFilterNode({
   audioContext,
+  accent,
   filter,
   filterEnvelope,
   durationSeconds,
   startTime,
 }: {
   audioContext: BaseAudioContext;
+  accent?: SynthAccentMeta;
   filter?: SynthFilterMeta;
   filterEnvelope?: SynthFilterEnvelopeMeta;
   durationSeconds: number;
@@ -1515,6 +1532,7 @@ function createSynthFilterNode({
 
   if (filterEnvelope) {
     scheduleSynthFilterEnvelope({
+      accent,
       durationSeconds,
       filterEnvelope,
       frequencyParam: filterNode.frequency,
@@ -1528,6 +1546,7 @@ function createSynthFilterNode({
 }
 
 function scheduleSynthFilterEnvelope({
+  accent,
   durationSeconds,
   filterEnvelope,
   frequencyParam,
@@ -1535,6 +1554,7 @@ function scheduleSynthFilterEnvelope({
   startTime,
   sustainFrequencyHz,
 }: {
+  accent?: SynthAccentMeta;
   durationSeconds: number;
   filterEnvelope: SynthFilterEnvelopeMeta;
   frequencyParam: AudioParam;
@@ -1551,7 +1571,8 @@ function scheduleSynthFilterEnvelope({
     Math.max(durationSeconds - attackSeconds, 0),
   );
   const peakFrequencyHz = getSafeSynthFilterFrequency({
-    frequencyHz: filterEnvelope.peakFrequencyHz,
+    frequencyHz:
+      filterEnvelope.peakFrequencyHz * (accent?.filterPeakMultiplier ?? 1),
     sampleRate,
   });
   const targetSustainFrequencyHz = getSafeSynthFilterFrequency({
@@ -1575,6 +1596,58 @@ function scheduleSynthFilterEnvelope({
   } else {
     frequencyParam.setValueAtTime(targetSustainFrequencyHz, peakTime);
   }
+}
+
+function scheduleSynthPitch({
+  frequencyParam,
+  glide,
+  startTime,
+  targetFrequencyHz,
+}: {
+  frequencyParam: AudioParam;
+  glide?: SynthGlideMeta;
+  startTime: number;
+  targetFrequencyHz: number;
+}): void {
+  if (!glide || glide.timeSeconds <= 0 || glide.startSemitoneOffset === 0) {
+    frequencyParam.setValueAtTime(targetFrequencyHz, startTime);
+    return;
+  }
+
+  const startFrequencyHz =
+    targetFrequencyHz * 2 ** (glide.startSemitoneOffset / 12);
+
+  frequencyParam.setValueAtTime(Math.max(startFrequencyHz, 20), startTime);
+  frequencyParam.exponentialRampToValueAtTime(
+    Math.max(targetFrequencyHz, 20),
+    startTime + glide.timeSeconds,
+  );
+}
+
+function getSynthAccentPeakGainValue({
+  accent,
+  peakGainValue,
+}: {
+  accent?: SynthAccentMeta;
+  peakGainValue: number;
+}): number {
+  return peakGainValue * (accent?.gainMultiplier ?? 1);
+}
+
+function getSynthAccentEndTime({
+  accent,
+  attackEndTime,
+  sustainEndTime,
+}: {
+  accent?: SynthAccentMeta;
+  attackEndTime: number;
+  sustainEndTime: number;
+}): number {
+  if (!accent) {
+    return sustainEndTime;
+  }
+
+  return Math.min(attackEndTime + accent.decaySeconds, sustainEndTime);
 }
 
 function getSafeSynthFilterFrequency({
