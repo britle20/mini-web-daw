@@ -16,12 +16,14 @@ import type {
   SampleLoopEvent,
 } from "./types";
 import {
+  DEFAULT_SYNTH_PRESET,
   decibelsToLinearGain,
   getArrangementLengthTicks,
   isAudioClip,
   isValidImportedAudioSourceBpm,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
   getTrackEffectiveGain,
   getTrackMixerState,
   normalizeTrackMixerState,
@@ -30,6 +32,8 @@ import {
   type MasterMixerState,
   type SampleMeta,
   type SampleZone,
+  type SynthFilterMeta,
+  type SynthPresetMeta,
   type TrackMixerState,
 } from "../model";
 import {
@@ -604,6 +608,7 @@ function scheduleOfflineNoteEvent({
       durationTicks,
       event,
       mixerOptions,
+      synthPreset: getSynthPresetForInstrument(instrument),
       tempoBpm,
     });
     return;
@@ -620,6 +625,7 @@ function scheduleOfflineNoteEvent({
       durationTicks,
       event,
       mixerOptions,
+      synthPreset: DEFAULT_SYNTH_PRESET,
       tempoBpm,
     });
     return;
@@ -641,48 +647,76 @@ function scheduleOfflineSynthNote({
   durationTicks,
   event,
   mixerOptions,
+  synthPreset = DEFAULT_SYNTH_PRESET,
   tempoBpm,
 }: {
   audioContext: OfflineAudioContext;
   durationTicks: number;
   event: NoteLoopEvent;
   mixerOptions: MixerGainOptions;
+  synthPreset?: SynthPresetMeta;
   tempoBpm: number;
 }): void {
   const startTime = ticksToSeconds(event.startTick, { tempoBpm });
   const durationSeconds = Math.max(ticksToSeconds(durationTicks, { tempoBpm }), 0.01);
   const stopTime = startTime + durationSeconds;
-  const attackSeconds = Math.min(0.01, durationSeconds / 4);
-  const releaseSeconds = Math.min(0.04, durationSeconds / 3);
+  const attackSeconds = Math.min(
+    synthPreset.envelope.attackSeconds,
+    durationSeconds / 4,
+  );
+  const releaseSeconds = Math.min(
+    synthPreset.envelope.releaseSeconds,
+    durationSeconds / 3,
+  );
+  const attackEndTime = startTime + attackSeconds;
   const sustainEndTime = Math.max(
-    startTime + attackSeconds,
+    attackEndTime,
     stopTime - releaseSeconds,
   );
-  const gainValue =
+  const peakGainValue =
     DEFAULT_SYNTH_GAIN *
+    (synthPreset.oscillator.gain ?? 1) *
     (event.gain ?? 1);
+  const sustainGainValue =
+    peakGainValue * (synthPreset.envelope.sustainGain ?? 1);
   const mixerGain = getMixerGain({
     ...mixerOptions,
     trackId: event.trackId,
   });
 
-  if (gainValue <= 0 || mixerGain <= 0) {
+  if (peakGainValue <= 0 || mixerGain <= 0) {
     return;
   }
 
   const sourceNode = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
+  const filterNode = createSynthFilterNode({
+    audioContext,
+    filter: synthPreset.filter,
+    startTime,
+  });
 
-  sourceNode.type = "triangle";
+  sourceNode.type = synthPreset.oscillator.type;
   sourceNode.frequency.setValueAtTime(
     midiNoteToFrequency(event.midiNote),
     startTime,
   );
+  sourceNode.detune.setValueAtTime(
+    synthPreset.oscillator.detuneCents ?? 0,
+    startTime,
+  );
   gainNode.gain.setValueAtTime(0, startTime);
-  gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackSeconds);
-  gainNode.gain.setValueAtTime(gainValue, sustainEndTime);
+  gainNode.gain.linearRampToValueAtTime(peakGainValue, attackEndTime);
+  gainNode.gain.linearRampToValueAtTime(sustainGainValue, sustainEndTime);
   gainNode.gain.linearRampToValueAtTime(0, stopTime);
-  sourceNode.connect(gainNode);
+
+  if (filterNode) {
+    sourceNode.connect(filterNode);
+    filterNode.connect(gainNode);
+  } else {
+    sourceNode.connect(gainNode);
+  }
+
   connectOfflineMixerRoute({
     audioContext,
     mixerGain,
@@ -957,6 +991,28 @@ function createStretchChannelBuffers(
       : new Float32Array(left);
 
   return [left, right];
+}
+
+function createSynthFilterNode({
+  audioContext,
+  filter,
+  startTime,
+}: {
+  audioContext: BaseAudioContext;
+  filter?: SynthFilterMeta;
+  startTime: number;
+}): BiquadFilterNode | null {
+  if (!filter) {
+    return null;
+  }
+
+  const filterNode = audioContext.createBiquadFilter();
+
+  filterNode.type = filter.type;
+  filterNode.frequency.setValueAtTime(filter.frequencyHz, startTime);
+  filterNode.Q.setValueAtTime(filter.q ?? 0, startTime);
+
+  return filterNode;
 }
 
 function midiNoteToFrequency(midiNote: number): number {

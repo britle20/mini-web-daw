@@ -123,12 +123,18 @@ export {
   updateTrackMixerState,
 } from "./mixer";
 export {
+  AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_PLUCK_INSTRUMENT,
+  AUDITION_SOFT_PAD_INSTRUMENT,
+  AUDITION_SUB_BASS_INSTRUMENT,
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_SYNTH_INSTRUMENT,
+  DEFAULT_SYNTH_PRESET,
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
 } from "./pitched-instruments";
 export type {
   ArrangementTrack,
@@ -172,4 +178,9 @@ export type {
   SamplerEnvelopeMeta,
   SamplerSustainMeta,
   SampleZone,
+  SynthEnvelopeMeta,
+  SynthFilterMeta,
+  SynthOscillatorMeta,
+  SynthPresetMeta,
+  SynthOscillatorType,
 } from "./pitched-instruments";

@@ -10,7 +10,34 @@ export interface PitchedInstrumentMeta {
   id: PitchedInstrumentId;
   kind: "sample" | "synth";
   name: string;
+  synthPreset?: SynthPresetMeta;
   zones?: readonly SampleZone[];
+}
+
+export interface SynthPresetMeta {
+  envelope: SynthEnvelopeMeta;
+  filter?: SynthFilterMeta;
+  oscillator: SynthOscillatorMeta;
+}
+
+export interface SynthOscillatorMeta {
+  detuneCents?: number;
+  gain?: number;
+  type: SynthOscillatorType;
+}
+
+export type SynthOscillatorType = "sawtooth" | "sine" | "square" | "triangle";
+
+export interface SynthEnvelopeMeta {
+  attackSeconds: number;
+  releaseSeconds: number;
+  sustainGain?: number;
+}
+
+export interface SynthFilterMeta {
+  frequencyHz: number;
+  q?: number;
+  type: "highpass" | "lowpass";
 }
 
 export interface SampleZone {
@@ -57,10 +84,111 @@ const IOWA_PIANO_ENVELOPE = {
   releaseSeconds: 0.09,
 } as const satisfies SamplerEnvelopeMeta;
 
+export const DEFAULT_SYNTH_PRESET = {
+  envelope: {
+    attackSeconds: 0.01,
+    releaseSeconds: 0.04,
+    sustainGain: 1,
+  },
+  oscillator: {
+    gain: 1,
+    type: "triangle",
+  },
+} as const satisfies SynthPresetMeta;
+
 export const DEFAULT_SYNTH_INSTRUMENT = {
   id: "default-synth",
   kind: "synth",
   name: "Default Synth",
+  synthPreset: DEFAULT_SYNTH_PRESET,
+} as const satisfies PitchedInstrumentMeta;
+
+export const AUDITION_SUB_BASS_INSTRUMENT = {
+  id: "audition-sub-bass",
+  kind: "synth",
+  name: "Audition Sub Bass",
+  synthPreset: {
+    envelope: {
+      attackSeconds: 0.006,
+      releaseSeconds: 0.1,
+      sustainGain: 0.85,
+    },
+    filter: {
+      frequencyHz: 420,
+      q: 0.7,
+      type: "lowpass",
+    },
+    oscillator: {
+      gain: 1.1,
+      type: "triangle",
+    },
+  },
+} as const satisfies PitchedInstrumentMeta;
+
+export const AUDITION_ACID_LEAD_INSTRUMENT = {
+  id: "audition-acid-lead",
+  kind: "synth",
+  name: "Audition Acid Lead",
+  synthPreset: {
+    envelope: {
+      attackSeconds: 0.004,
+      releaseSeconds: 0.07,
+      sustainGain: 0.72,
+    },
+    filter: {
+      frequencyHz: 1500,
+      q: 7,
+      type: "lowpass",
+    },
+    oscillator: {
+      gain: 0.78,
+      type: "sawtooth",
+    },
+  },
+} as const satisfies PitchedInstrumentMeta;
+
+export const AUDITION_SOFT_PAD_INSTRUMENT = {
+  id: "audition-soft-pad",
+  kind: "synth",
+  name: "Audition Soft Pad",
+  synthPreset: {
+    envelope: {
+      attackSeconds: 0.18,
+      releaseSeconds: 0.45,
+      sustainGain: 0.76,
+    },
+    filter: {
+      frequencyHz: 900,
+      q: 0.8,
+      type: "lowpass",
+    },
+    oscillator: {
+      gain: 0.62,
+      type: "sine",
+    },
+  },
+} as const satisfies PitchedInstrumentMeta;
+
+export const AUDITION_PLUCK_INSTRUMENT = {
+  id: "audition-pluck",
+  kind: "synth",
+  name: "Audition Pluck",
+  synthPreset: {
+    envelope: {
+      attackSeconds: 0.002,
+      releaseSeconds: 0.18,
+      sustainGain: 0.18,
+    },
+    filter: {
+      frequencyHz: 2600,
+      q: 1.2,
+      type: "lowpass",
+    },
+    oscillator: {
+      gain: 0.72,
+      type: "square",
+    },
+  },
 } as const satisfies PitchedInstrumentMeta;
 
 export const IOWA_PIANO_INSTRUMENT = {
@@ -89,6 +217,10 @@ export const IOWA_PIANO_INSTRUMENT = {
 export const PITCHED_INSTRUMENTS = [
   DEFAULT_SYNTH_INSTRUMENT,
   IOWA_PIANO_INSTRUMENT,
+  AUDITION_SUB_BASS_INSTRUMENT,
+  AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_SOFT_PAD_INSTRUMENT,
+  AUDITION_PLUCK_INSTRUMENT,
 ] as const satisfies readonly PitchedInstrumentMeta[];
 
 export function getPitchedInstrument(
@@ -113,4 +245,10 @@ export function getSampleZoneForMidiNote({
   midiNote: number;
 }): SampleZone | undefined {
   return instrument.zones?.find((zone) => zone.midiNote === midiNote);
+}
+
+export function getSynthPresetForInstrument(
+  instrument: PitchedInstrumentMeta,
+): SynthPresetMeta {
+  return instrument.synthPreset ?? DEFAULT_SYNTH_PRESET;
 }

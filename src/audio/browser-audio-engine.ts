@@ -21,8 +21,10 @@ import type {
   TransportSnapshot,
 } from "./types";
 import {
+  DEFAULT_SYNTH_PRESET,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
   createDefaultMasterMixerState,
   decibelsToLinearGain,
   getTrackEffectiveGain,
@@ -30,6 +32,8 @@ import {
   normalizeTrackMixerState,
   type MasterMixerState,
   type SampleZone,
+  type SynthFilterMeta,
+  type SynthPresetMeta,
   type TrackId,
   type TrackMixerState,
 } from "../model";
@@ -57,6 +61,7 @@ type ClipLoopEvent =
   | ({ kind: "sample" } & SampleLoopEvent);
 
 interface ActiveNoteVoice {
+  effectNodes?: AudioNode[];
   gainNode: GainNode;
   isReleasing: boolean;
   releaseSeconds: number;
@@ -869,7 +874,11 @@ export class BrowserAudioEngine implements AudioEngine {
     const instrument = getPitchedInstrument(event.instrumentId);
 
     if (instrument.kind !== "sample") {
-      this.scheduleSynthNote(event, { tempoBpm, when });
+      this.scheduleSynthNote(event, {
+        synthPreset: getSynthPresetForInstrument(instrument),
+        tempoBpm,
+        when,
+      });
       return;
     }
 
@@ -893,9 +902,11 @@ export class BrowserAudioEngine implements AudioEngine {
   private scheduleSynthNote(
     event: NoteLoopEvent,
     {
+      synthPreset = DEFAULT_SYNTH_PRESET,
       tempoBpm,
       when,
     }: {
+      synthPreset?: SynthPresetMeta;
       tempoBpm: number;
       when: number;
     },
@@ -909,14 +920,32 @@ export class BrowserAudioEngine implements AudioEngine {
       0.01,
     );
     const stopTime = startTime + durationSeconds;
-    const attackSeconds = Math.min(0.01, durationSeconds / 4);
-    const releaseSeconds = Math.min(0.04, durationSeconds / 3);
+    const attackSeconds = Math.min(
+      synthPreset.envelope.attackSeconds,
+      durationSeconds / 4,
+    );
+    const releaseSeconds = Math.min(
+      synthPreset.envelope.releaseSeconds,
+      durationSeconds / 3,
+    );
+    const attackEndTime = startTime + attackSeconds;
     const sustainEndTime = Math.max(
-      startTime + attackSeconds,
+      attackEndTime,
       stopTime - releaseSeconds,
     );
-    const gainValue = DEFAULT_SYNTH_GAIN * (event.gain ?? 1);
+    const peakGainValue =
+      DEFAULT_SYNTH_GAIN *
+      (synthPreset.oscillator.gain ?? 1) *
+      (event.gain ?? 1);
+    const sustainGainValue =
+      peakGainValue * (synthPreset.envelope.sustainGain ?? 1);
+    const filterNode = createSynthFilterNode({
+      audioContext,
+      filter: synthPreset.filter,
+      startTime,
+    });
     const synthVoice: ActiveNoteVoice = {
+      effectNodes: filterNode ? [filterNode] : undefined,
       gainNode,
       isReleasing: false,
       releaseSeconds,
@@ -924,18 +953,28 @@ export class BrowserAudioEngine implements AudioEngine {
       startTime,
     };
 
-    sourceNode.type = "triangle";
+    sourceNode.type = synthPreset.oscillator.type;
     sourceNode.frequency.setValueAtTime(
       midiNoteToFrequency(event.midiNote),
       startTime,
     );
+    sourceNode.detune.setValueAtTime(
+      synthPreset.oscillator.detuneCents ?? 0,
+      startTime,
+    );
 
     gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackSeconds);
-    gainNode.gain.setValueAtTime(gainValue, sustainEndTime);
+    gainNode.gain.linearRampToValueAtTime(peakGainValue, attackEndTime);
+    gainNode.gain.linearRampToValueAtTime(sustainGainValue, sustainEndTime);
     gainNode.gain.linearRampToValueAtTime(0, stopTime);
 
-    sourceNode.connect(gainNode);
+    if (filterNode) {
+      sourceNode.connect(filterNode);
+      filterNode.connect(gainNode);
+    } else {
+      sourceNode.connect(gainNode);
+    }
+
     this.connectSourceGain(gainNode, event.trackId);
     this.activeNoteVoices.add(synthVoice);
     sourceNode.addEventListener(
@@ -943,6 +982,9 @@ export class BrowserAudioEngine implements AudioEngine {
       () => {
         this.activeNoteVoices.delete(synthVoice);
         disconnectAudioNode(sourceNode);
+        for (const effectNode of synthVoice.effectNodes ?? []) {
+          disconnectAudioNode(effectNode);
+        }
         disconnectAudioNode(gainNode);
       },
       { once: true },
@@ -1117,6 +1159,9 @@ export class BrowserAudioEngine implements AudioEngine {
 
     this.activeNoteVoices.delete(noteVoice);
     disconnectAudioNode(noteVoice.sourceNode);
+    for (const effectNode of noteVoice.effectNodes ?? []) {
+      disconnectAudioNode(effectNode);
+    }
     disconnectAudioNode(noteVoice.gainNode);
   }
 
@@ -1436,6 +1481,28 @@ function createStretchChannelBuffers(
       : new Float32Array(left);
 
   return [left, right];
+}
+
+function createSynthFilterNode({
+  audioContext,
+  filter,
+  startTime,
+}: {
+  audioContext: BaseAudioContext;
+  filter?: SynthFilterMeta;
+  startTime: number;
+}): BiquadFilterNode | null {
+  if (!filter) {
+    return null;
+  }
+
+  const filterNode = audioContext.createBiquadFilter();
+
+  filterNode.type = filter.type;
+  filterNode.frequency.setValueAtTime(filter.frequencyHz, startTime);
+  filterNode.Q.setValueAtTime(filter.q ?? 0, startTime);
+
+  return filterNode;
 }
 
 function midiNoteToFrequency(midiNote: number): number {

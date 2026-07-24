@@ -123,6 +123,7 @@ tests/unit/utils/tick-time.test.ts
 - WAV export duration and missing-source failure behavior.
 - WAV export behavior for BPM-aware imported audio clips.
 - Oscillator synth preset metadata, lookup, and live/export playback parity.
+- Oscillator synth audition candidates remaining in the final UI after user rejection.
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
@@ -155,6 +156,7 @@ Manual audio checks should verify:
 - Piano roll multi-note editing checks should verify Ctrl/Cmd-click toggling, box selection, selected-note visual state, group drag behavior, Delete/Backspace deletion, and app-local copy/paste if included.
 - Velocity editing checks should verify drum and note velocity UI, lower/higher audible gain, persisted values after refresh, and exported WAV gain changes.
 - Oscillator synth preset checks should verify that approved presets can be added to clips, sound distinct in `PAT` and `SONG` playback, render in arrangement WAV export, and rejected audition candidates are absent from the final UI.
+- During an audition PR, manually verify every candidate sound and record which candidates should be kept, renamed, or removed before final merge.
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.
 - Functional mixer checks should verify track faders, master fader, mute, solo, and level meters affect real `SONG` playback.

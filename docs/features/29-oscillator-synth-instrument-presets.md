@@ -4,7 +4,7 @@ Related issue: #17
 
 ## Status
 
-Planned
+In review: candidate audition
 
 ## Goal
 
@@ -67,6 +67,15 @@ Recommended candidate families:
 - Pluck: short envelope patch using square or sawtooth waves.
 
 The final PR should document which candidates were accepted and remove rejected candidates from production UI and model lists.
+
+Current audition candidates exposed by the implementation branch:
+
+- `audition-sub-bass`: triangle oscillator with a low-pass filter and stable low-frequency envelope.
+- `audition-acid-lead`: sawtooth oscillator with a resonant low-pass filter.
+- `audition-soft-pad`: sine oscillator with slower attack/release and a muted low-pass filter.
+- `audition-pluck`: square oscillator with a short pluck-style envelope.
+
+These candidate IDs are temporary review names. Before the feature is considered complete, rejected candidates should be removed and accepted candidates should be renamed if needed.
 
 ## Data Model Notes
 

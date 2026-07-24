@@ -5,7 +5,13 @@ import {
 } from "../utils";
 
 export type DrumLaneId = "kick" | "snare" | "closedHat" | "openHat";
-export type PitchedInstrumentId = "default-synth" | "iowa-piano";
+export type PitchedInstrumentId =
+  | "default-synth"
+  | "iowa-piano"
+  | "audition-sub-bass"
+  | "audition-acid-lead"
+  | "audition-soft-pad"
+  | "audition-pluck";
 export type DrumStepSubdivision = 1 | 2 | 3;
 export type HybridClipLengthBars = 1 | 2 | 4;
 

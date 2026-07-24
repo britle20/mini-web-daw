@@ -1,25 +1,36 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_PLUCK_INSTRUMENT,
+  AUDITION_SOFT_PAD_INSTRUMENT,
+  AUDITION_SUB_BASS_INSTRUMENT,
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_SYNTH_INSTRUMENT,
+  DEFAULT_SYNTH_PRESET,
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
 } from "../../../src/model";
 
 describe("pitched instruments", () => {
-  it("defines Default Synth and Iowa Piano as serializable metadata", () => {
+  it("defines Default Synth, audition synths, and Iowa Piano as serializable metadata", () => {
     expect(DEFAULT_PITCHED_INSTRUMENT_ID).toBe("default-synth");
     expect(PITCHED_INSTRUMENTS).toEqual([
       DEFAULT_SYNTH_INSTRUMENT,
       IOWA_PIANO_INSTRUMENT,
+      AUDITION_SUB_BASS_INSTRUMENT,
+      AUDITION_ACID_LEAD_INSTRUMENT,
+      AUDITION_SOFT_PAD_INSTRUMENT,
+      AUDITION_PLUCK_INSTRUMENT,
     ]);
     expect(DEFAULT_SYNTH_INSTRUMENT).toEqual({
       id: "default-synth",
       kind: "synth",
       name: "Default Synth",
+      synthPreset: DEFAULT_SYNTH_PRESET,
     });
     expect(IOWA_PIANO_INSTRUMENT).toMatchObject({
       id: "iowa-piano",
@@ -79,12 +90,54 @@ describe("pitched instruments", () => {
 
   it("looks up pitched instruments by ID", () => {
     expect(getPitchedInstrument("default-synth")).toBe(DEFAULT_SYNTH_INSTRUMENT);
+    expect(getPitchedInstrument("audition-sub-bass")).toBe(
+      AUDITION_SUB_BASS_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-acid-lead")).toBe(
+      AUDITION_ACID_LEAD_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-soft-pad")).toBe(
+      AUDITION_SOFT_PAD_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-pluck")).toBe(
+      AUDITION_PLUCK_INSTRUMENT,
+    );
     expect(getPitchedInstrument("iowa-piano")).toBe(IOWA_PIANO_INSTRUMENT);
   });
 
+  it("resolves synth preset metadata for oscillator instruments", () => {
+    expect(getSynthPresetForInstrument(DEFAULT_SYNTH_INSTRUMENT)).toEqual({
+      envelope: {
+        attackSeconds: 0.01,
+        releaseSeconds: 0.04,
+        sustainGain: 1,
+      },
+      oscillator: {
+        gain: 1,
+        type: "triangle",
+      },
+    });
+    expect(getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT)).toMatchObject({
+      envelope: {
+        attackSeconds: 0.004,
+        releaseSeconds: 0.07,
+        sustainGain: 0.72,
+      },
+      filter: {
+        frequencyHz: 1500,
+        q: 7,
+        type: "lowpass",
+      },
+      oscillator: {
+        gain: 0.78,
+        type: "sawtooth",
+      },
+    });
+  });
+
   it("keeps pitched instrument metadata JSON serializable", () => {
-    expect(JSON.parse(JSON.stringify(IOWA_PIANO_INSTRUMENT))).toEqual(
-      IOWA_PIANO_INSTRUMENT,
+    expect(JSON.parse(JSON.stringify(PITCHED_INSTRUMENTS))).toEqual(
+      PITCHED_INSTRUMENTS,
     );
   });
 });

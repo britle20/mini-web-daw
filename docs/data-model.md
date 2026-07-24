@@ -491,7 +491,16 @@ Initial pitched instrument IDs:
 - `default-synth`: oscillator-based playback. It can hold notes for arbitrary durations.
 - `iowa-piano`: sample-based playback using bundled Iowa Piano WAV files.
 
-Future built-in oscillator instruments should use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects.
+Built-in oscillator instruments use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects.
+
+The oscillator preset audition branch currently exposes temporary candidate IDs:
+
+- `audition-sub-bass`.
+- `audition-acid-lead`.
+- `audition-soft-pad`.
+- `audition-pluck`.
+
+These IDs should be treated as review candidates until the user selects which presets belong in the final app.
 
 Instrument selection may start as selected-clip or runtime UI state during early M1 work. If it becomes part of saved project behavior, store only serializable IDs and metadata, not runtime audio objects.
 
