@@ -14,6 +14,7 @@ Focus:
 - Remove the temporary `docs/spikes/` directory after its durable context is preserved.
 - Add useful oscillator-based synth instrument presets through an audition-and-select workflow.
 - Add multi-note piano roll editing so short phrases can be moved, deleted, and copied as groups.
+- Add multi-clip arrangement editing so song sections can be moved, deleted, and copied as groups.
 - Keep synth preset metadata serializable and runtime Web Audio nodes inside the audio engine.
 
 ## Active Issue Order
@@ -21,6 +22,7 @@ Focus:
 1. #16 Docs: fold Signalsmith spike notes into permanent docs -> docs cleanup, no feature spec
 2. #17 Add oscillator synth instrument presets -> `docs/features/29-oscillator-synth-instrument-presets.md`
 3. #19 Add piano roll multi-note selection and editing -> `docs/features/30-piano-roll-multi-note-editing.md`
+4. #20 Add arrangement multi-clip selection and clipboard editing -> `docs/features/31-arrangement-multi-clip-editing.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -61,6 +63,7 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 - Basic undo and redo.
 - Velocity editing for drum and note events.
 - Advanced piano roll commands such as transpose, nudge, duplicate, repeat, and group resize.
+- Advanced arrangement commands such as time selection editing, persistent clip groups, split, trim, stretch, consolidate, and duplicate shortcuts.
 - Starter project template.
 - Metronome.
 - Quantize utilities.

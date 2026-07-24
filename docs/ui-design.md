@@ -137,6 +137,18 @@ Start with a simple snap policy, such as beat-level snapping at 480 ticks, unles
 
 `SONG` mode playback should render a visual arrangement playhead. The playhead may use `requestAnimationFrame` for display, but exact playback must remain scheduled by the audio engine against `AudioContext.currentTime`.
 
+Arrangement multi-clip editing should operate on placed `ClipInstance` objects:
+
+- Ctrl/Cmd-click toggles placed clip selection.
+- Empty-timeline drag may draw a box selection marquee.
+- Selected clips should have a clear visual state.
+- Dragging one selected clip should move the selected group while preserving relative tick and track offsets.
+- Group movement should clamp at arrangement start/end and track boundaries.
+- Delete or Backspace should delete selected placements, not sidebar source clips.
+- Ctrl/Cmd+C and Ctrl/Cmd+V should use an app-local arrangement clipboard for selected placements.
+
+Arrangement copy/paste should create new clip instance IDs and preserve references to existing source clips and imported sample metadata. Do not use the OS clipboard or persist arrangement clipboard state in project data for the first version.
+
 ## Clip Length Controls
 
 Hybrid clip editors expose a compact length control for 1, 2, and 4 bars.

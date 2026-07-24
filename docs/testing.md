@@ -22,6 +22,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Drum step subdivision tick math and event toggling: unit tests.
 - Clip collection and sidebar membership transformations: unit tests.
 - Arrangement clip instance creation, movement, deletion, and snapping: unit tests.
+- Arrangement multi-clip selection, group movement, group deletion, bounds clamping, and app-local copy/paste transforms: unit tests where practical.
 - Arrangement scheduler event expansion from clip instances: unit tests where practical.
 - IndexedDB persistence adapters, migrations, and serialization boundaries: unit or integration tests with mocked storage where practical.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
@@ -84,6 +85,7 @@ tests/unit/utils/tick-time.test.ts
 - Removing pitched instruments that own note events.
 - Arrangement clip placement snapping.
 - Arrangement clip move/delete behavior.
+- Arrangement multi-clip group movement, bounds clamping, group delete, and app-local copy/paste behavior.
 - Arrangement playback event expansion across clip instance offsets.
 - Arrangement playhead behavior during play, pause, resume, and stop.
 - Sample start offsets, optional sustain loop points, and note release behavior.
@@ -143,6 +145,7 @@ Manual audio checks should verify:
 - WAV import checks should verify valid WAV import, invalid file rejection, imported clip selection, displayed duration metadata, and clear behavior after refresh when imported file persistence is not implemented.
 - BPM-aware imported audio checks should verify source BPM input, equal-BPM unchanged playback, higher/lower project BPM stretch, pitch preservation, and next-playback-only behavior after BPM changes.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
+- Arrangement multi-clip checks should verify Ctrl/Cmd-click toggling, box selection, selected-clip visual state, group drag movement, group delete, app-local copy/paste, and group-level clamping at timeline and track bounds.
 - Imported audio clip arrangement checks should verify clear missing-source behavior after refresh until imported file persistence exists.
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
 - Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.

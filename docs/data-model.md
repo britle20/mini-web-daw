@@ -261,6 +261,8 @@ Newly imported WAV clips should have `sourceBpm`. Existing or imported project f
 
 Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
 
+Arrangement multi-clip selection should not change the `ClipInstance` shape. Selected instance IDs, selection marquee geometry, last arrangement edit position, and app-local arrangement clipboard contents are runtime UI state. Copy/paste creates new serializable `ClipInstance` objects with new IDs and references the same source `clipId`; it must not duplicate source clips or store clipboard data in project JSON.
+
 ## Project File Export and Import
 
 Project JSON export should serialize editable project data and imported sample metadata, but not imported WAV bytes.
