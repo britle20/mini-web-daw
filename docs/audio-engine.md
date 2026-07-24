@@ -77,6 +77,7 @@ Arrangement playback should:
 - Expand hybrid clip note events to `clipInstance.startTick + noteEvent.startTick`.
 - Schedule audio clips at `clipInstance.startTick` when their runtime sample data is available.
 - Respect `clipInstance.lengthTicks` as the visible and playable duration boundary.
+- Apply `ClipInstance` fade-in and fade-out settings as scheduled gain ramps.
 - Keep play, pause, resume, and stop behavior separate from React render timing.
 
 Arrangement playback derives its outer bounds from arrangement state, specifically `arrangementLengthBars` and the normalized loop range. Avoid reintroducing fixed 16-bar playback assumptions.
@@ -89,7 +90,11 @@ Imported audio clips use source BPM metadata and project BPM for pitch-preservin
 
 `SONG` scheduling should use source BPM metadata and project BPM to schedule pitch-preserving stretched imported audio clips. Missing source BPM should be reported clearly rather than silently playing at the wrong speed.
 
+Arrangement clip trim and fade settings are clip-instance playback metadata. Start/end trim should affect which part of the placed instance is scheduled. Imported audio start trim may use `sourceOffsetSeconds` to start inside the source media. Fade durations such as `fadeInTicks` and `fadeOutTicks` should be converted to seconds at scheduling time and applied with `GainNode` automation before track mixer gain.
+
 Arrangement playback still uses the lookahead scheduler. UI drag state, arrangement DOM geometry, visual playheads, decoded buffers, and active source nodes remain runtime-only.
+
+Undo and redo should restore editable project/model state only. They must not attempt to restore active `AudioContext` state, decoded buffers, scheduled source nodes, meter values, or current transport playback position. After undo/redo, future scheduling should read the restored serializable state.
 
 ## Offline WAV Export
 
@@ -102,7 +107,9 @@ The current first export pass:
 - Renders from arrangement tick 0 through the configured arrangement length.
 - Uses the same tick-to-seconds conversion rules as live playback.
 - Includes arranged hybrid clip drums, `Default Synth` notes, Iowa Piano sampled notes, imported audio clips, track volume, track mute/solo, and master gain.
+- Applies event velocity to drum hits and pitched notes before mixer gain.
 - Crops imported audio clip playback to the placed `ClipInstance.lengthTicks`; if the source ends first, the remaining placement renders silence.
+- Applies clip-instance fade-in and fade-out ramps before track and master mixer gain.
 - Blocks with a clear error when required imported sample data is missing.
 - Avoids mutating live transport state, active source nodes, or decoded runtime caches during rendering.
 
@@ -132,6 +139,8 @@ scheduled source
 ```
 
 Track gain nodes should be keyed by stable `trackId`. When arrangement playback schedules a drum sample, synth note, sample-based note, or audio clip source, that source should connect to the appropriate track channel instead of directly to the destination.
+
+Track creation, deletion, rename, and reorder are model/UI operations, but the audio engine must tolerate the resulting track list changing between playback runs. Runtime routing should be rebuilt or cleaned up by stable `trackId`; array index positions are not stable routing identity.
 
 Mixer settings such as `volumeDb`, `muted`, `solo`, and master `volumeDb` are serializable model data. Web Audio nodes, analyser nodes, meter buffers, active source nodes, and the routing graph are runtime-only audio-engine data.
 
@@ -213,6 +222,7 @@ Basic one-shot playback should:
 - Create a source node.
 - Connect it to the appropriate destination or gain node.
 - Schedule `source.start(when)`.
+- Apply the event's normalized velocity or gain before track and master mixer gain.
 
 ## Basic Synth Note Playback
 
@@ -224,11 +234,32 @@ Basic synth note playback should:
 - Convert `durationTicks` to seconds using tempo and PPQ.
 - Schedule oscillator start and stop against `AudioContext.currentTime`.
 - Use a short gain envelope to avoid clicks.
+- Apply `NoteEvent.velocity` as normalized event gain before track and master mixer gain.
 - Treat oscillator nodes and gain nodes as runtime-only objects.
 
 This is not a full sampler instrument. Bundled pitched sample metadata can exist for future sampler work, but the initial held-note behavior should not depend on sample length.
 
 The oscillator instrument should be kept as `Default Synth` when sample-based pitched instruments are added. It is useful as a reliable fallback because it can sustain notes for arbitrary durations without sample loop metadata.
+
+## Oscillator Synth Presets
+
+Additional built-in synth instruments may reuse the oscillator note path with different serializable preset metadata.
+
+Synth preset playback should:
+
+- Look up the selected pitched instrument by `instrumentId`.
+- Read serializable oscillator, envelope, and optional filter settings.
+- Create runtime oscillator, gain, and filter nodes inside the audio engine.
+- Convert `midiNote` to oscillator frequency at scheduling time.
+- Convert `durationTicks` to seconds using tempo and PPQ.
+- Schedule note start and stop against `AudioContext.currentTime`.
+- Apply a gain envelope to avoid clicks.
+- Route the source through the current mixer path when playing in `SONG` mode.
+- Use equivalent offline nodes during arrangement WAV export.
+
+Do not render oscillator presets to bundled WAV files for the first pass. Do not store `OscillatorNode`, `BiquadFilterNode`, `GainNode`, or generated PCM buffers in project JSON.
+
+When adding new synth presets, the implementation may temporarily expose candidate sounds for user audition. Rejected candidates should be removed before the PR is finalized so the app keeps only useful named instruments.
 
 ## Sample-based Pitched Playback
 
@@ -366,6 +397,7 @@ The UI may render a vertical playhead over the piano roll or drum sequencer by c
 
 - Sampler instrument.
 - Synth instruments.
+- User-created synth patch editing.
 - More advanced mixer routing such as pan, sends, buses, automation, and recording arm.
 - More advanced effects such as reverb, multiple slots, chains, presets, and automation.
 - Offline/export rendering later.

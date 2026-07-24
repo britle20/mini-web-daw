@@ -27,7 +27,7 @@ The initial transport UI range is 60 to 180 BPM. Implementations should validate
 - `Project`: top-level serializable project document.
 - `ProjectSummary`: lightweight local project list item.
 - `ProjectCollectionState`: browser-local project collection metadata such as the active project ID.
-- `Track`: a lane that can contain clip instances.
+- `Track`: a stable arrangement lane that can contain clip instances.
 - `Clip`: reusable musical content. It may be a hybrid MIDI/drum clip or, later, an imported audio clip.
 - `ClipInstance`: placement of a clip on a track in arrangement time.
 - `AudioClip`: reusable clip content that references imported audio metadata.
@@ -74,6 +74,8 @@ the `projectId` on the record for deletion by project.
 Project file export/import should preserve sample IDs inside the exported project. If the imported project's `projectId` collides with a local project, the app may assign a new local project ID while leaving internal clip IDs and sample IDs unchanged.
 
 Switching projects should not mutate the outgoing project document except for an intentional save or autosave flush. Runtime UI selection, decoded sample caches, active source nodes, transport state, and audio preview state should be reset or rebuilt for the newly active project.
+
+Undo and redo history should be treated as runtime editor state for the first implementation. History entries may contain bounded snapshots or patches of serializable project/app model state, but the history stack itself should not be stored in project JSON or IndexedDB. Runtime audio objects, decoded buffers, scheduled nodes, meters, DOM geometry, pointer state, and active transport state must not be stored in history entries.
 
 ## Hybrid Clips
 
@@ -259,7 +261,9 @@ export interface ImportedSampleSource {
 
 Newly imported WAV clips should have `sourceBpm`. Existing or imported project files may still lack it; those clips should show a clear missing-source-BPM state or provide an edit path before tempo-synced playback.
 
-Future arrangement resizing should be non-destructive. The arrangement should store resize/trim decisions on `ClipInstance`, for example `lengthTicks` and optional `sourceOffsetSeconds`, instead of modifying the source audio clip or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
+Arrangement clip trim and fade editing should be non-destructive. The arrangement stores trim/fade decisions on `ClipInstance`, for example `lengthTicks`, optional `sourceOffsetSeconds`, `fadeInTicks`, and `fadeOutTicks`, instead of modifying the source clip, imported audio clip, or embedded file. Without a dedicated time-stretching feature, resizing an imported audio clip instance should mean trimming/cropping playback or showing silence after the source ends; it should not imply tempo-matched stretching.
+
+Arrangement multi-clip selection should not change the `ClipInstance` shape. Selected instance IDs, selection marquee geometry, last arrangement edit position, and app-local arrangement clipboard contents are runtime UI state. Copy/paste creates new serializable `ClipInstance` objects with new IDs and references the same source `clipId`; it must not duplicate source clips or store clipboard data in project JSON.
 
 ## Project File Export and Import
 
@@ -300,6 +304,7 @@ The arrangement view places reusable clips on tracks using `ClipInstance` object
 - Where it starts in arrangement ticks.
 - How long the placed instance lasts in arrangement ticks.
 - Optional source offset for audio clips.
+- Optional fade-in and fade-out durations in arrangement ticks.
 
 `ArrangementState` owns arrangement-level song settings such as:
 
@@ -324,6 +329,8 @@ export interface ClipInstance {
   startTick: Tick;
   lengthTicks: Tick;
   sourceOffsetSeconds?: number;
+  fadeInTicks?: Tick;
+  fadeOutTicks?: Tick;
 }
 
 export interface ArrangementLoopRange {
@@ -355,6 +362,18 @@ Without time stretching, imported audio playback runs at original speed. If an a
 Imported WAV clips with valid `sourceBpm` may be pitch-preserving stretched at scheduling time so they follow the project BPM. The source clip and `ClipInstance` still store arrangement positions and lengths in ticks. The runtime audio engine owns decoded buffers and stretch nodes.
 
 Snap and movement should update tick values, not pixel positions. UI geometry is derived from `startTick`, `lengthTicks`, track order, and timeline constants.
+
+Clip-instance trim should not delete source clip events or rewrite imported audio bytes. For hybrid clips, trim limits which drum and note events are visible and playable in the placed instance window. For imported audio clips, start trim may advance `sourceOffsetSeconds`; end trim reduces `lengthTicks`. Fade durations should be stored as tick values on the `ClipInstance` and applied as runtime gain ramps during `SONG` playback and arrangement WAV export.
+
+## Arrangement Track Management
+
+Arrangement tracks are serializable project data. Track order is the order of the `tracks` array, but track identity must come from stable `trackId` values rather than array indexes.
+
+Track rename and reorder operations should preserve `trackId` so existing `ClipInstance.trackId`, mixer settings, effect settings, and playback routing stay attached to the intended track.
+
+Deleting a track with placed clip instances or meaningful mixer/effect state should require explicit confirmation. The first deletion policy is to remove the deleted track and the clip instances owned by that track after confirmation. It should not silently move clip instances to another track.
+
+The app should keep at least one arrangement track available unless a later feature explicitly supports zero-track projects. Runtime mixer nodes and meters for removed tracks must be cleaned up by the audio engine and must not be serialized.
 
 ## Bundled Drum Sample Naming and Display
 
@@ -393,6 +412,8 @@ Initial drum lanes map to bundled sample IDs:
 Drum event IDs are deterministic within a clip using the clip ID, lane ID, and start tick. Runtime playback converts these serializable events into audio engine sample loop events; the project model itself does not store `AudioBuffer` or other Web Audio objects.
 
 When a lane sample changes, existing `DrumEvent` objects for that lane should be updated to the new `sampleId` so playback and project export reflect the visible lane setting.
+
+Drum event velocity is serializable event data. Use a normalized first range of `0` to `1`, where `1` is full event gain and `0` is silent. Editing velocity must not change event timing, lane ID, or sample ID.
 
 ## Drum Step Subdivisions
 
@@ -470,9 +491,41 @@ Initial pitched instrument IDs:
 - `default-synth`: oscillator-based playback. It can hold notes for arbitrary durations.
 - `iowa-piano`: sample-based playback using bundled Iowa Piano WAV files.
 
+Future built-in oscillator instruments should use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects.
+
 Instrument selection may start as selected-clip or runtime UI state during early M1 work. If it becomes part of saved project behavior, store only serializable IDs and metadata, not runtime audio objects.
 
 Each `NoteEvent` stores the serializable `instrumentId` that owns that note. This allows multiple pitched instruments, such as `Default Synth` and `Iowa Piano`, to have notes at the same tick and pitch inside one hybrid clip and play simultaneously.
+
+Built-in oscillator synth presets may define oscillator, envelope, and optional filter settings:
+
+```ts
+export interface SynthPresetMeta {
+  oscillator: SynthOscillatorMeta;
+  envelope: SynthEnvelopeMeta;
+  filter?: SynthFilterMeta;
+}
+
+export interface SynthOscillatorMeta {
+  type: "sine" | "square" | "sawtooth" | "triangle";
+  detuneCents?: number;
+  gain?: number;
+}
+
+export interface SynthEnvelopeMeta {
+  attackSeconds: number;
+  releaseSeconds: number;
+  sustainGain?: number;
+}
+
+export interface SynthFilterMeta {
+  type: "lowpass" | "highpass";
+  frequencyHz: number;
+  q?: number;
+}
+```
+
+The exact implementation may refine these fields, but the boundary should stay the same: project data stores serializable preset IDs and numeric parameters; the audio engine creates `OscillatorNode`, `BiquadFilterNode`, and `GainNode` instances at runtime.
 
 Iowa Piano can use sample zones to map MIDI notes to bundled samples and optional sustain loop metadata:
 
@@ -481,7 +534,32 @@ export interface PitchedInstrumentMeta {
   id: "default-synth" | "iowa-piano" | string;
   name: string;
   kind: "synth" | "sample";
+  synthPreset?: SynthPresetMeta;
   zones?: SampleZone[];
+}
+
+export interface SynthPresetMeta {
+  oscillator: SynthOscillatorMeta;
+  envelope: SynthEnvelopeMeta;
+  filter?: SynthFilterMeta;
+}
+
+export interface SynthOscillatorMeta {
+  type: "sine" | "square" | "sawtooth" | "triangle";
+  detuneCents?: number;
+  gain?: number;
+}
+
+export interface SynthEnvelopeMeta {
+  attackSeconds: number;
+  releaseSeconds: number;
+  sustainGain?: number;
+}
+
+export interface SynthFilterMeta {
+  type: "lowpass" | "highpass";
+  frequencyHz: number;
+  q?: number;
 }
 
 export interface SampleZone {
@@ -526,6 +604,10 @@ The initial piano roll stores note events directly in the selected hybrid clip's
 The initial visual piano roll grid has 32 columns across the 1-bar clip. At PPQ 480, one bar is 1920 ticks, so one piano roll grid column is 60 ticks. Drum sequencing still uses the 16-step grid where each step is 120 ticks.
 
 The UI may allow left-click or drag creation, dragging existing notes to move pitch/time, and right-click deletion. These interactions must update `noteEvents` in serializable clip state. Runtime audio objects used for synth playback or sample decoding must stay outside project JSON.
+
+Multi-note selection should not change the `NoteEvent` shape. Selected note IDs, selection marquee geometry, last edit position, and app-local note clipboard contents are runtime editor state. Copy/paste creates new serializable `NoteEvent` objects with new IDs; it must not store clipboard data in project JSON.
+
+Note velocity is serializable event data. Editing note velocity should update only `NoteEvent.velocity`; it must not change note timing, pitch, instrument ownership, or duration.
 
 ## Illustrative Types
 
@@ -596,6 +678,8 @@ export interface ClipInstance {
   startTick: Tick;
   lengthTicks: Tick;
   sourceOffsetSeconds?: number;
+  fadeInTicks?: Tick;
+  fadeOutTicks?: Tick;
 }
 
 export interface ArrangementState {

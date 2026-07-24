@@ -18,11 +18,16 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Pure utilities: unit tests.
 - Tick/time conversion: unit tests.
 - Data model transformations: unit tests.
+- Undo/redo history push, undo, redo, redo invalidation, and bounded history behavior: unit tests.
 - Clip length and arrangement length transformations: unit tests.
 - Drum step subdivision tick math and event toggling: unit tests.
 - Clip collection and sidebar membership transformations: unit tests.
 - Arrangement clip instance creation, movement, deletion, and snapping: unit tests.
+- Arrangement multi-clip selection, group movement, group deletion, bounds clamping, and app-local copy/paste transforms: unit tests where practical.
+- Clip-instance trim/fade transforms, clamping, and source-offset calculations: unit tests.
+- Track create, rename, delete, reorder, and selection fallback transforms: unit tests.
 - Arrangement scheduler event expansion from clip instances: unit tests where practical.
+- Arrangement scheduler/export planning for clip-instance trim/fade: unit tests where practical.
 - IndexedDB persistence adapters, migrations, and serialization boundaries: unit or integration tests with mocked storage where practical.
 - Multi-project store operations: unit or integration tests for create, list, rename, delete, active project selection, and migration from the single active project shape.
 - Project dialog validation helpers: unit tests for empty, trimmed, and duplicate-name behavior where practical.
@@ -35,6 +40,8 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
+- Piano roll multi-note selection, group movement, group deletion, and app-local copy/paste transforms: unit tests where practical.
+- Drum and note velocity clamping, model updates, and gain calculations: unit tests where practical.
 - Tempo control and scheduler tempo update behavior: unit tests where practical.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
@@ -75,6 +82,7 @@ tests/unit/utils/tick-time.test.ts
 - Pause/resume tick offsets.
 - Playhead wrapping at loop boundaries.
 - BPM changes while stopped, paused, and playing.
+- Undo/redo coverage and history grouping for destructive or high-frequency edit gestures.
 - Pitched instrument selection.
 - Drum step subdivision tick math.
 - Drum step subdivision changes preserving existing events.
@@ -83,6 +91,13 @@ tests/unit/utils/tick-time.test.ts
 - Removing pitched instruments that own note events.
 - Arrangement clip placement snapping.
 - Arrangement clip move/delete behavior.
+- Arrangement multi-clip group movement, bounds clamping, group delete, and app-local copy/paste behavior.
+- Clip-instance trim and fade boundary handling.
+- Imported audio source offset calculations during start trim.
+- Fade ramp behavior during live playback and arrangement WAV export.
+- Track creation, deletion, rename, and reorder behavior.
+- Stable `trackId` preservation after track reorder.
+- Deleting tracks with clip instances or mixer/effect state.
 - Arrangement playback event expansion across clip instance offsets.
 - Arrangement playhead behavior during play, pause, resume, and stop.
 - Sample start offsets, optional sustain loop points, and note release behavior.
@@ -104,6 +119,7 @@ tests/unit/utils/tick-time.test.ts
 - Imported sample hash matching and relinking.
 - WAV export duration and missing-source failure behavior.
 - WAV export behavior for BPM-aware imported audio clips.
+- Oscillator synth preset metadata, lookup, and live/export playback parity.
 - Scheduler timing.
 - Mixer decibel-to-gain conversion.
 - Mixer mute/solo state interactions and effective audibility.
@@ -113,12 +129,14 @@ tests/unit/utils/tick-time.test.ts
 - Mixer effect routing interaction with track faders, mute, solo, meters, and master output.
 - Track-to-master routing during arrangement playback.
 - Runtime level meter behavior and meter decay after stop.
+- Velocity edits affecting live playback and arrangement WAV export without changing event timing.
 
 ## Manual Testing Guidance for Audio Features
 
 Manual audio checks should verify:
 
 - Audio starts only after user interaction when required by the browser.
+- Undo/redo checks should verify keyboard shortcuts, disabled states if visible controls exist, redo invalidation after new edits, playback from restored state, and autosave behavior after restored edits.
 - One-shot samples play repeatedly without reusing the same source node.
 - Loop playback does not double-trigger events at the loop boundary.
 - UI playhead movement roughly matches audible playback.
@@ -131,6 +149,9 @@ Manual audio checks should verify:
 - When sampler sustain metadata exists, long sample-based notes should sustain without obvious repeated attacks as much as the sample material allows.
 - If sampler sustain metadata is missing or invalid, sample-based notes should fall back to one-shot playback rather than stuck or unstable sustain.
 - Instrument switching changes piano roll playback sound without mutating existing note events.
+- Piano roll multi-note editing checks should verify Ctrl/Cmd-click toggling, box selection, selected-note visual state, group drag behavior, Delete/Backspace deletion, and app-local copy/paste if included.
+- Velocity editing checks should verify drum and note velocity UI, lower/higher audible gain, persisted values after refresh, and exported WAV gain changes.
+- Oscillator synth preset checks should verify that approved presets can be added to clips, sound distinct in `PAT` and `SONG` playback, render in arrangement WAV export, and rejected audition candidates are absent from the final UI.
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.
 - Functional mixer checks should verify track faders, master fader, mute, solo, and level meters affect real `SONG` playback.
@@ -139,7 +160,10 @@ Manual audio checks should verify:
 - WAV import checks should verify valid WAV import, invalid file rejection, imported clip selection, displayed duration metadata, and clear behavior after refresh when imported file persistence is not implemented.
 - BPM-aware imported audio checks should verify source BPM input, equal-BPM unchanged playback, higher/lower project BPM stretch, pitch preservation, and next-playback-only behavior after BPM changes.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
+- Arrangement multi-clip checks should verify Ctrl/Cmd-click toggling, box selection, selected-clip visual state, group drag movement, group delete, app-local copy/paste, and group-level clamping at timeline and track bounds.
+- Clip trim/fade checks should verify trimming both edges, adding fade-in/fade-out, clamping handles, persistence after refresh, and parity between live playback and WAV export.
 - Imported audio clip arrangement checks should verify clear missing-source behavior after refresh until imported file persistence exists.
+- Track management checks should verify adding, renaming, deleting, and reordering tracks with and without placed clips, then confirming arrangement playback, mixer routing, and export still target the intended tracks.
 - Multi-project checks should verify creating, renaming, switching, deleting, refreshing, and imported audio isolation across projects.
 - Project dialog checks should verify create, rename, delete, cancel, empty-name validation, duplicate-name handling, focus states, and keyboard submit/cancel behavior where implemented.
 - Clip duplication checks should verify duplicating hybrid and audio clips, editing duplicates without mutating sources, no automatic arrangement placement creation, and persistence after refresh.

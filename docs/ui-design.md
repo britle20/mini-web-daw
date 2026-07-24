@@ -137,6 +137,47 @@ Start with a simple snap policy, such as beat-level snapping at 480 ticks, unles
 
 `SONG` mode playback should render a visual arrangement playhead. The playhead may use `requestAnimationFrame` for display, but exact playback must remain scheduled by the audio engine against `AudioContext.currentTime`.
 
+Arrangement multi-clip editing should operate on placed `ClipInstance` objects:
+
+- Ctrl/Cmd-click toggles placed clip selection.
+- Empty-timeline drag may draw a box selection marquee.
+- Selected clips should have a clear visual state.
+- Dragging one selected clip should move the selected group while preserving relative tick and track offsets.
+- Group movement should clamp at arrangement start/end and track boundaries.
+- Delete or Backspace should delete selected placements, not sidebar source clips.
+- Ctrl/Cmd+C and Ctrl/Cmd+V should use an app-local arrangement clipboard for selected placements.
+
+Arrangement copy/paste should create new clip instance IDs and preserve references to existing source clips and imported sample metadata. Do not use the OS clipboard or persist arrangement clipboard state in project data for the first version.
+
+## Arrangement Clip Trim and Fade
+
+Placed arrangement clips should support non-destructive trim and fade editing from the clip block itself.
+
+- Show compact start/end trim handles at the left and right edges of each placed clip.
+- Show fade-in and fade-out handles or an equivalent compact visual affordance near the clip edges.
+- Render fade state as a subtle overlay or curve inside the clip block.
+- Keep the source clip name readable while handles are visible.
+- Use semantic buttons or pointer targets with accessible labels where practical.
+- Snap trim movement to the existing arrangement grid unless a feature introduces free trim.
+- Do not show a destructive audio-file editing UI; trim/fade edits belong to the placed `ClipInstance`.
+- Do not fill the full arrangement lane to represent fades. Keep the visual state local to the clip block.
+
+Inline styles are acceptable for dynamic trim/fade geometry because positions and widths are derived from ticks and the current arrangement grid.
+
+## Track Management
+
+Arrangement track controls should live in the arrangement view, near the track header column or arrangement toolbar.
+
+- Provide a compact add-track control.
+- Allow track renaming without leaving the arrangement view.
+- Allow track deletion with a custom destructive confirmation when the track contains clips or meaningful mixer/effect state.
+- Allow vertical track reordering through a clear drag handle or compact move controls.
+- Keep track names, clip lanes, and mixer strips aligned after reorder.
+- Preserve visible selection and focus states during track edits.
+- Keep at least one track visible in the first implementation.
+
+Track management should not redesign the mixer panel. The mixer should follow the current serializable track order and keep stable track settings attached to stable `trackId` values.
+
 ## Clip Length Controls
 
 Hybrid clip editors expose a compact length control for 1, 2, and 4 bars.
@@ -306,6 +347,18 @@ Clip editors may render a vertical playhead to show the current runtime transpor
 - Inline styles are acceptable for computed playhead geometry such as `left` or `transform`.
 - When stopped, the playhead should reset to the start of the selected clip. When paused, it should remain at the paused tick.
 
+## Undo and Redo
+
+Undo and redo should behave like app-level editing commands:
+
+- `Ctrl/Cmd+Z`: undo.
+- `Ctrl/Cmd+Shift+Z`: redo.
+- `Ctrl/Cmd+Y`: redo where practical.
+
+If visible controls are added, place them near the transport/project command area or in a compact app command menu. Disabled states should clearly indicate when undo or redo is unavailable.
+
+Do not expose runtime audio state through undo/redo UI. The command should restore editable project/editor state and leave active transport/audio runtime behavior intentionally separate.
+
 ## Piano Roll Editing
 
 The initial piano roll should use a compact C4-C5 pitch range that matches the bundled Iowa Piano sample files.
@@ -316,8 +369,19 @@ The initial piano roll should use a compact C4-C5 pitch range that matches the b
 - Use left-click drag on empty grid space to create a longer note.
 - Use left-click drag on an existing note to move its pitch and start tick.
 - Use right-click on an existing note to delete it.
+- Use Ctrl/Cmd-click on existing notes to add or remove notes from the current selection.
+- Use empty-grid drag for box selection when the pointer gesture is not creating a note.
+- Use Delete or Backspace to delete selected notes.
 - Store the result in serializable `noteEvents`; do not store UI geometry as project data.
 - Use inline styles only for computed note geometry such as top, left, width, and height.
+
+Multi-note editing should preserve existing single-note workflows. Selected notes should have a clear visual state, and dragging one selected note should move the selected group together while preserving relative timing and pitch offsets.
+
+The first copy/paste behavior should use an app-local note clipboard. Ctrl/Cmd+C copies selected notes from the current clip and pitched instrument. Ctrl/Cmd+V pastes into the current clip and pitched instrument, creates new note IDs, preserves relative tick and pitch spacing, and selects the pasted notes. Do not use the OS clipboard or persist clipboard state in project data for the first version.
+
+Piano roll velocity editing may use a bottom velocity lane or compact inline editor. The velocity editor should align with the piano roll grid, edit `NoteEvent.velocity`, and avoid changing note timing, pitch, instrument ownership, or duration.
+
+Drum velocity editing should stay compact in the step sequencer. The first implementation may use vertical drag on active steps, modifier drag, or a small popover/slider. The chosen interaction should not make ordinary step toggling ambiguous.
 
 ## Pitched Instrument Selection
 
@@ -325,6 +389,10 @@ Initial options:
 
 - `Default Synth`: oscillator-based playback.
 - `Iowa Piano`: sample-based playback using bundled Iowa Piano WAV files.
+
+Additional built-in oscillator synth presets should appear in this same picker after they are approved. They should not require a separate synth browser or patch editor in the first implementation.
+
+During implementation, temporary audition candidates may be exposed in a feature branch so the user can listen and choose. Rejected candidates should not remain visible in the final UI.
 
 Pitched instruments should appear as selectable clip child items in the left project sidebar, alongside the drum lane entry. Selecting a pitched instrument changes which instrument's note events are visible and editable in the piano roll.
 
