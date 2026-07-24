@@ -267,6 +267,8 @@ When adding new synth presets, the implementation may temporarily expose candida
 
 The audition implementation may expose temporary oscillator instruments such as sub bass, acid lead, soft pad, and pluck candidates. These should still use the same metadata-driven synth path: serializable preset data in the model, runtime Web Audio nodes in the engine, and equivalent live/export scheduling behavior.
 
+Acid-style oscillator candidates need more than a sawtooth wave. They should use a resonant low-pass filter and a short filter cutoff envelope if they are intended to approximate an acid bass or lead sound.
+
 ## Sample-based Pitched Playback
 
 Iowa Piano should be a separate pitched instrument from `Default Synth`. It should use the bundled C4-C5 Iowa Piano WAV files when the piano roll note pitch has a matching sample.

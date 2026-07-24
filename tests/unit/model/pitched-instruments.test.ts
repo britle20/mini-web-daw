@@ -119,17 +119,23 @@ describe("pitched instruments", () => {
     });
     expect(getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT)).toMatchObject({
       envelope: {
-        attackSeconds: 0.004,
-        releaseSeconds: 0.07,
-        sustainGain: 0.72,
+        attackSeconds: 0.002,
+        releaseSeconds: 0.045,
+        sustainGain: 0.42,
       },
       filter: {
-        frequencyHz: 1500,
-        q: 7,
+        frequencyHz: 520,
+        q: 12,
         type: "lowpass",
       },
+      filterEnvelope: {
+        attackSeconds: 0.004,
+        decaySeconds: 0.16,
+        peakFrequencyHz: 4200,
+        sustainFrequencyHz: 520,
+      },
       oscillator: {
-        gain: 0.78,
+        gain: 0.74,
         type: "sawtooth",
       },
     });

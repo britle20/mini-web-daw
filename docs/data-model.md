@@ -513,6 +513,7 @@ export interface SynthPresetMeta {
   oscillator: SynthOscillatorMeta;
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
 }
 
 export interface SynthOscillatorMeta {
@@ -531,6 +532,13 @@ export interface SynthFilterMeta {
   type: "lowpass" | "highpass";
   frequencyHz: number;
   q?: number;
+}
+
+export interface SynthFilterEnvelopeMeta {
+  attackSeconds?: number;
+  decaySeconds: number;
+  peakFrequencyHz: number;
+  sustainFrequencyHz?: number;
 }
 ```
 

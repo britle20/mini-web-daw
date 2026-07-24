@@ -71,7 +71,7 @@ The final PR should document which candidates were accepted and remove rejected 
 Current audition candidates exposed by the implementation branch:
 
 - `audition-sub-bass`: triangle oscillator with a low-pass filter and stable low-frequency envelope.
-- `audition-acid-lead`: sawtooth oscillator with a resonant low-pass filter.
+- `audition-acid-lead`: sawtooth oscillator with a resonant low-pass cutoff sweep.
 - `audition-soft-pad`: sine oscillator with slower attack/release and a muted low-pass filter.
 - `audition-pluck`: square oscillator with a short pluck-style envelope.
 
@@ -85,6 +85,7 @@ Built-in synth presets should be represented as serializable metadata, for examp
 export interface SynthPresetMeta {
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
   oscillator: SynthOscillatorMeta;
 }
 
@@ -92,6 +93,13 @@ export interface SynthOscillatorMeta {
   type: "sine" | "square" | "sawtooth" | "triangle";
   detuneCents?: number;
   gain?: number;
+}
+
+export interface SynthFilterEnvelopeMeta {
+  attackSeconds?: number;
+  decaySeconds: number;
+  peakFrequencyHz: number;
+  sustainFrequencyHz?: number;
 }
 ```
 

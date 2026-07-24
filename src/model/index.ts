@@ -179,6 +179,7 @@ export type {
   SamplerSustainMeta,
   SampleZone,
   SynthEnvelopeMeta,
+  SynthFilterEnvelopeMeta,
   SynthFilterMeta,
   SynthOscillatorMeta,
   SynthPresetMeta,

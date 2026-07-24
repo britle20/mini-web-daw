@@ -32,6 +32,7 @@ import {
   type MasterMixerState,
   type SampleMeta,
   type SampleZone,
+  type SynthFilterEnvelopeMeta,
   type SynthFilterMeta,
   type SynthPresetMeta,
   type TrackMixerState,
@@ -693,6 +694,8 @@ function scheduleOfflineSynthNote({
   const filterNode = createSynthFilterNode({
     audioContext,
     filter: synthPreset.filter,
+    filterEnvelope: synthPreset.filterEnvelope,
+    durationSeconds,
     startTime,
   });
 
@@ -996,10 +999,14 @@ function createStretchChannelBuffers(
 function createSynthFilterNode({
   audioContext,
   filter,
+  filterEnvelope,
+  durationSeconds,
   startTime,
 }: {
   audioContext: BaseAudioContext;
   filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
+  durationSeconds: number;
   startTime: number;
 }): BiquadFilterNode | null {
   if (!filter) {
@@ -1007,12 +1014,89 @@ function createSynthFilterNode({
   }
 
   const filterNode = audioContext.createBiquadFilter();
+  const baseFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz: filter.frequencyHz,
+    sampleRate: audioContext.sampleRate,
+  });
 
   filterNode.type = filter.type;
-  filterNode.frequency.setValueAtTime(filter.frequencyHz, startTime);
+  filterNode.frequency.setValueAtTime(baseFrequencyHz, startTime);
   filterNode.Q.setValueAtTime(filter.q ?? 0, startTime);
 
+  if (filterEnvelope) {
+    scheduleSynthFilterEnvelope({
+      durationSeconds,
+      filterEnvelope,
+      frequencyParam: filterNode.frequency,
+      sampleRate: audioContext.sampleRate,
+      startTime,
+      sustainFrequencyHz: filterEnvelope.sustainFrequencyHz ?? baseFrequencyHz,
+    });
+  }
+
   return filterNode;
+}
+
+function scheduleSynthFilterEnvelope({
+  durationSeconds,
+  filterEnvelope,
+  frequencyParam,
+  sampleRate,
+  startTime,
+  sustainFrequencyHz,
+}: {
+  durationSeconds: number;
+  filterEnvelope: SynthFilterEnvelopeMeta;
+  frequencyParam: AudioParam;
+  sampleRate: number;
+  startTime: number;
+  sustainFrequencyHz: number;
+}): void {
+  const attackSeconds = Math.min(
+    filterEnvelope.attackSeconds ?? 0,
+    durationSeconds,
+  );
+  const decaySeconds = Math.min(
+    filterEnvelope.decaySeconds,
+    Math.max(durationSeconds - attackSeconds, 0),
+  );
+  const peakFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz: filterEnvelope.peakFrequencyHz,
+    sampleRate,
+  });
+  const targetSustainFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz: sustainFrequencyHz,
+    sampleRate,
+  });
+  const peakTime = startTime + attackSeconds;
+  const decayEndTime = peakTime + decaySeconds;
+
+  if (attackSeconds > 0) {
+    frequencyParam.linearRampToValueAtTime(peakFrequencyHz, peakTime);
+  } else {
+    frequencyParam.setValueAtTime(peakFrequencyHz, startTime);
+  }
+
+  if (decaySeconds > 0) {
+    frequencyParam.exponentialRampToValueAtTime(
+      targetSustainFrequencyHz,
+      decayEndTime,
+    );
+  } else {
+    frequencyParam.setValueAtTime(targetSustainFrequencyHz, peakTime);
+  }
+}
+
+function getSafeSynthFilterFrequency({
+  frequencyHz,
+  sampleRate,
+}: {
+  frequencyHz: number;
+  sampleRate: number;
+}): number {
+  const nyquistLimitHz = Math.max(20, sampleRate / 2 - 1);
+
+  return Math.min(Math.max(frequencyHz, 20), nyquistLimitHz);
 }
 
 function midiNoteToFrequency(midiNote: number): number {
