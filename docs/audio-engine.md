@@ -91,6 +91,8 @@ Imported audio clips use source BPM metadata and project BPM for pitch-preservin
 
 Arrangement playback still uses the lookahead scheduler. UI drag state, arrangement DOM geometry, visual playheads, decoded buffers, and active source nodes remain runtime-only.
 
+Undo and redo should restore editable project/model state only. They must not attempt to restore active `AudioContext` state, decoded buffers, scheduled source nodes, meter values, or current transport playback position. After undo/redo, future scheduling should read the restored serializable state.
+
 ## Offline WAV Export
 
 Arrangement WAV export should use an offline audio rendering path, not the live React UI or visual playhead.
@@ -102,6 +104,7 @@ The current first export pass:
 - Renders from arrangement tick 0 through the configured arrangement length.
 - Uses the same tick-to-seconds conversion rules as live playback.
 - Includes arranged hybrid clip drums, `Default Synth` notes, Iowa Piano sampled notes, imported audio clips, track volume, track mute/solo, and master gain.
+- Applies event velocity to drum hits and pitched notes before mixer gain.
 - Crops imported audio clip playback to the placed `ClipInstance.lengthTicks`; if the source ends first, the remaining placement renders silence.
 - Blocks with a clear error when required imported sample data is missing.
 - Avoids mutating live transport state, active source nodes, or decoded runtime caches during rendering.
@@ -213,6 +216,7 @@ Basic one-shot playback should:
 - Create a source node.
 - Connect it to the appropriate destination or gain node.
 - Schedule `source.start(when)`.
+- Apply the event's normalized velocity or gain before track and master mixer gain.
 
 ## Basic Synth Note Playback
 
@@ -224,6 +228,7 @@ Basic synth note playback should:
 - Convert `durationTicks` to seconds using tempo and PPQ.
 - Schedule oscillator start and stop against `AudioContext.currentTime`.
 - Use a short gain envelope to avoid clicks.
+- Apply `NoteEvent.velocity` as normalized event gain before track and master mixer gain.
 - Treat oscillator nodes and gain nodes as runtime-only objects.
 
 This is not a full sampler instrument. Bundled pitched sample metadata can exist for future sampler work, but the initial held-note behavior should not depend on sample length.

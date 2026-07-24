@@ -18,6 +18,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Pure utilities: unit tests.
 - Tick/time conversion: unit tests.
 - Data model transformations: unit tests.
+- Undo/redo history push, undo, redo, redo invalidation, and bounded history behavior: unit tests.
 - Clip length and arrangement length transformations: unit tests.
 - Drum step subdivision tick math and event toggling: unit tests.
 - Clip collection and sidebar membership transformations: unit tests.
@@ -37,6 +38,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
 - Piano roll multi-note selection, group movement, group deletion, and app-local copy/paste transforms: unit tests where practical.
+- Drum and note velocity clamping, model updates, and gain calculations: unit tests where practical.
 - Tempo control and scheduler tempo update behavior: unit tests where practical.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
@@ -77,6 +79,7 @@ tests/unit/utils/tick-time.test.ts
 - Pause/resume tick offsets.
 - Playhead wrapping at loop boundaries.
 - BPM changes while stopped, paused, and playing.
+- Undo/redo coverage and history grouping for destructive or high-frequency edit gestures.
 - Pitched instrument selection.
 - Drum step subdivision tick math.
 - Drum step subdivision changes preserving existing events.
@@ -117,12 +120,14 @@ tests/unit/utils/tick-time.test.ts
 - Mixer effect routing interaction with track faders, mute, solo, meters, and master output.
 - Track-to-master routing during arrangement playback.
 - Runtime level meter behavior and meter decay after stop.
+- Velocity edits affecting live playback and arrangement WAV export without changing event timing.
 
 ## Manual Testing Guidance for Audio Features
 
 Manual audio checks should verify:
 
 - Audio starts only after user interaction when required by the browser.
+- Undo/redo checks should verify keyboard shortcuts, disabled states if visible controls exist, redo invalidation after new edits, playback from restored state, and autosave behavior after restored edits.
 - One-shot samples play repeatedly without reusing the same source node.
 - Loop playback does not double-trigger events at the loop boundary.
 - UI playhead movement roughly matches audible playback.
@@ -136,6 +141,7 @@ Manual audio checks should verify:
 - If sampler sustain metadata is missing or invalid, sample-based notes should fall back to one-shot playback rather than stuck or unstable sustain.
 - Instrument switching changes piano roll playback sound without mutating existing note events.
 - Piano roll multi-note editing checks should verify Ctrl/Cmd-click toggling, box selection, selected-note visual state, group drag behavior, Delete/Backspace deletion, and app-local copy/paste if included.
+- Velocity editing checks should verify drum and note velocity UI, lower/higher audible gain, persisted values after refresh, and exported WAV gain changes.
 - Oscillator synth preset checks should verify that approved presets can be added to clips, sound distinct in `PAT` and `SONG` playback, render in arrangement WAV export, and rejected audition candidates are absent from the final UI.
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.

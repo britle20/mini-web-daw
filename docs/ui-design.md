@@ -318,6 +318,18 @@ Clip editors may render a vertical playhead to show the current runtime transpor
 - Inline styles are acceptable for computed playhead geometry such as `left` or `transform`.
 - When stopped, the playhead should reset to the start of the selected clip. When paused, it should remain at the paused tick.
 
+## Undo and Redo
+
+Undo and redo should behave like app-level editing commands:
+
+- `Ctrl/Cmd+Z`: undo.
+- `Ctrl/Cmd+Shift+Z`: redo.
+- `Ctrl/Cmd+Y`: redo where practical.
+
+If visible controls are added, place them near the transport/project command area or in a compact app command menu. Disabled states should clearly indicate when undo or redo is unavailable.
+
+Do not expose runtime audio state through undo/redo UI. The command should restore editable project/editor state and leave active transport/audio runtime behavior intentionally separate.
+
 ## Piano Roll Editing
 
 The initial piano roll should use a compact C4-C5 pitch range that matches the bundled Iowa Piano sample files.
@@ -337,6 +349,10 @@ The initial piano roll should use a compact C4-C5 pitch range that matches the b
 Multi-note editing should preserve existing single-note workflows. Selected notes should have a clear visual state, and dragging one selected note should move the selected group together while preserving relative timing and pitch offsets.
 
 The first copy/paste behavior should use an app-local note clipboard. Ctrl/Cmd+C copies selected notes from the current clip and pitched instrument. Ctrl/Cmd+V pastes into the current clip and pitched instrument, creates new note IDs, preserves relative tick and pitch spacing, and selects the pasted notes. Do not use the OS clipboard or persist clipboard state in project data for the first version.
+
+Piano roll velocity editing may use a bottom velocity lane or compact inline editor. The velocity editor should align with the piano roll grid, edit `NoteEvent.velocity`, and avoid changing note timing, pitch, instrument ownership, or duration.
+
+Drum velocity editing should stay compact in the step sequencer. The first implementation may use vertical drag on active steps, modifier drag, or a small popover/slider. The chosen interaction should not make ordinary step toggling ambiguous.
 
 ## Pitched Instrument Selection
 

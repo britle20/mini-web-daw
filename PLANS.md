@@ -15,6 +15,8 @@ Focus:
 - Add useful oscillator-based synth instrument presets through an audition-and-select workflow.
 - Add multi-note piano roll editing so short phrases can be moved, deleted, and copied as groups.
 - Add multi-clip arrangement editing so song sections can be moved, deleted, and copied as groups.
+- Add undo/redo history before editing operations become too easy to lose.
+- Add velocity editing for drum and piano roll events.
 - Keep synth preset metadata serializable and runtime Web Audio nodes inside the audio engine.
 
 ## Active Issue Order
@@ -23,6 +25,8 @@ Focus:
 2. #17 Add oscillator synth instrument presets -> `docs/features/29-oscillator-synth-instrument-presets.md`
 3. #19 Add piano roll multi-note selection and editing -> `docs/features/30-piano-roll-multi-note-editing.md`
 4. #20 Add arrangement multi-clip selection and clipboard editing -> `docs/features/31-arrangement-multi-clip-editing.md`
+5. #22 Add undo and redo history -> `docs/features/32-undo-redo-history.md`
+6. #21 Add velocity editing for drum and piano roll events -> `docs/features/33-velocity-editing.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
@@ -60,8 +64,6 @@ When new work is needed, create or update a feature spec under `docs/features/`,
 ## Backlog
 
 - Keyboard shortcuts for transport and editing.
-- Basic undo and redo.
-- Velocity editing for drum and note events.
 - Advanced piano roll commands such as transpose, nudge, duplicate, repeat, and group resize.
 - Advanced arrangement commands such as time selection editing, persistent clip groups, split, trim, stretch, consolidate, and duplicate shortcuts.
 - Starter project template.

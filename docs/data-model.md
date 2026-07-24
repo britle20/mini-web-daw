@@ -75,6 +75,8 @@ Project file export/import should preserve sample IDs inside the exported projec
 
 Switching projects should not mutate the outgoing project document except for an intentional save or autosave flush. Runtime UI selection, decoded sample caches, active source nodes, transport state, and audio preview state should be reset or rebuilt for the newly active project.
 
+Undo and redo history should be treated as runtime editor state for the first implementation. History entries may contain bounded snapshots or patches of serializable project/app model state, but the history stack itself should not be stored in project JSON or IndexedDB. Runtime audio objects, decoded buffers, scheduled nodes, meters, DOM geometry, pointer state, and active transport state must not be stored in history entries.
+
 ## Hybrid Clips
 
 Early clips may contain both drum events and note events. This keeps the M1 editor focused: one clip can hold a drum pattern and a piano roll phrase.
@@ -396,6 +398,8 @@ Drum event IDs are deterministic within a clip using the clip ID, lane ID, and s
 
 When a lane sample changes, existing `DrumEvent` objects for that lane should be updated to the new `sampleId` so playback and project export reflect the visible lane setting.
 
+Drum event velocity is serializable event data. Use a normalized first range of `0` to `1`, where `1` is full event gain and `0` is silent. Editing velocity must not change event timing, lane ID, or sample ID.
+
 ## Drum Step Subdivisions
 
 The sequencer may keep the visible `1` through `16` primary step labels while allowing each primary step to split into smaller substeps.
@@ -587,6 +591,8 @@ The initial visual piano roll grid has 32 columns across the 1-bar clip. At PPQ 
 The UI may allow left-click or drag creation, dragging existing notes to move pitch/time, and right-click deletion. These interactions must update `noteEvents` in serializable clip state. Runtime audio objects used for synth playback or sample decoding must stay outside project JSON.
 
 Multi-note selection should not change the `NoteEvent` shape. Selected note IDs, selection marquee geometry, last edit position, and app-local note clipboard contents are runtime editor state. Copy/paste creates new serializable `NoteEvent` objects with new IDs; it must not store clipboard data in project JSON.
+
+Note velocity is serializable event data. Editing note velocity should update only `NoteEvent.velocity`; it must not change note timing, pitch, instrument ownership, or duration.
 
 ## Illustrative Types
 
