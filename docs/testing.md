@@ -37,6 +37,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Imported audio source BPM validation and stretch-rate helpers: unit tests.
 - BPM-aware imported audio scheduler planning: unit tests where practical.
 - BPM-aware imported audio export planning and missing-metadata errors: unit tests where practical.
+- Stretched imported sample pre-rendering, cache key selection, and cache invalidation after sample replacement or relink: unit tests where practical.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
@@ -108,6 +109,8 @@ tests/unit/utils/tick-time.test.ts
 - Imported audio source BPM validation and missing-BPM behavior.
 - Imported audio stretch-rate calculation from project BPM and source BPM.
 - Imported audio stretch startup reliability and retry behavior.
+- Imported audio stretched-buffer cache invalidation after import or relink.
+- Adjacent or repeated imported audio clips using the same stretched sample cache.
 - Imported file persistence limitations across refresh.
 - IndexedDB restore behavior for imported sample metadata and blobs.
 - Multi-project active project migration and restore behavior.
@@ -159,6 +162,7 @@ Manual audio checks should verify:
 - Drum subdivision settings of `1`, `2`, and `3` should toggle and play hits at the expected rhythmic positions.
 - WAV import checks should verify valid WAV import, invalid file rejection, imported clip selection, displayed duration metadata, and clear behavior after refresh when imported file persistence is not implemented.
 - BPM-aware imported audio checks should verify source BPM input, equal-BPM unchanged playback, higher/lower project BPM stretch, pitch preservation, and next-playback-only behavior after BPM changes.
+- Repeated imported audio clip checks should verify adjacent placements, looped playback, stop/play restart, and BPM changes do not leave stale stretched buffers or stuck active sources.
 - Arrangement placement checks should verify dragging clips into tracks, moving placed clips, deleting placed clips, and playback from `SONG` mode.
 - Arrangement multi-clip checks should verify Ctrl/Cmd-click toggling, box selection, selected-clip visual state, group drag movement, group delete, app-local copy/paste, and group-level clamping at timeline and track bounds.
 - Clip trim/fade checks should verify trimming both edges, adding fade-in/fade-out, clamping handles, persistence after refresh, and parity between live playback and WAV export.

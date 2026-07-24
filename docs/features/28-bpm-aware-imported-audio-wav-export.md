@@ -3,7 +3,7 @@
 Related issue: #6
 
 ## Status
-Planned
+Implemented
 
 ## Goal
 
@@ -11,9 +11,9 @@ Make arrangement WAV export render imported audio clips with the same project-BP
 
 ## Context
 
-Arrangement WAV export currently renders imported audio at source speed and crops or leaves silence based on the placed clip instance length. After imported audio live playback becomes BPM-aware, exported WAV files should match what users hear from `SONG` playback.
+Arrangement WAV export originally rendered imported audio at source speed and cropped or left silence based on the placed clip instance length. The implemented export path now matches BPM-aware live `SONG` playback for imported audio clips.
 
-This requires separate verification because offline rendering may use `OfflineAudioContext`, and the `signalsmith-stretch` AudioWorklet/WASM path must be tested in that context.
+The export path pre-renders stretched imported sample buffers through `signalsmith-stretch` in an offline context, then places those rendered buffers into the main arrangement render.
 
 ## Scope
 

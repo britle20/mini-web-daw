@@ -11,9 +11,9 @@ Make imported WAV audio clips follow the project BPM during live playback while 
 
 ## Context
 
-Imported WAV clips currently play at original speed. That is acceptable for one-shots, but loop material should stay in time with the project tempo.
+Imported WAV clips originally played at source speed. That was acceptable for one-shots, but loop material needs to stay in time with the project tempo.
 
-A local `signalsmith-stretch` spike confirmed that pitch-preserving stretch can work in the browser for manual WAV playback. The production feature should integrate that behavior into imported audio clip metadata and `SONG` arrangement playback.
+The production implementation uses `signalsmith-stretch` behind the audio engine to make imported audio clip playback BPM-aware while preserving pitch.
 
 ## Scope
 
@@ -36,7 +36,7 @@ Excluded:
 - Automatic BPM detection.
 - Beat warping, transient markers, slicing, or manual warp grids.
 - Live stretch-ratio changes while playback is already running.
-- Offline arrangement WAV export stretch support.
+- Offline arrangement WAV export stretch support, which is covered by `docs/features/28-bpm-aware-imported-audio-wav-export.md`.
 - Non-WAV import formats.
 - Pitch shifting as a user-facing control.
 - Clip instance resize handles or destructive source audio edits.
@@ -48,7 +48,7 @@ Excluded:
 - Source BPM is required for newly imported WAV clips.
 - Project state must remain serializable.
 - Do not store `AudioBuffer`, `AudioNode`, `AudioWorkletNode`, `File`, `Blob`, object URLs, or decoded PCM data in project JSON.
-- If `signalsmith-stretch` becomes a production dependency, document why it is needed and keep the integration isolated behind the audio engine API.
+- Keep `signalsmith-stretch` isolated behind the audio engine API.
 - Imported audio should fail visibly when required source BPM metadata or sample data is missing.
 
 ## Data Model Notes
@@ -86,17 +86,18 @@ Examples:
 
 The first implementation should not update the stretch ratio for already-playing imported audio when the user moves the BPM slider. Stop and start playback again to use the new project BPM.
 
-The local spike found that the stretch node can occasionally fail to start if scheduled too tightly. The production implementation should use a conservative schedule lead time, retry behavior, or another explicit startup guard.
+Earlier live-node testing found that stretch nodes can fail to start if scheduled too tightly. The adopted implementation avoids that path by pre-rendering stretched buffers before playback and scheduling them as ordinary buffer sources.
 
 ## Implementation notes
 
 - Source BPM is stored on `SampleMeta.source.sourceBpm`.
 - Imported audio arrangement events carry runtime-only `sourceBpm`, `stretchRate`, and `playbackDurationSeconds` values derived from project BPM at playback/event-build time.
 - Live `SONG` playback uses `projectBpm / sourceBpm` to tempo-sync imported audio clips.
-- The target live arrangement path uses `signalsmith-stretch` with `semitones = 0` so imported clips remain pitch-preserving while following project BPM.
+- The live arrangement path uses `signalsmith-stretch` with `semitones = 0` so imported clips remain pitch-preserving while following project BPM.
+- Non-unity stretch rates are pre-rendered and cached by sample ID, sample cache version, and stretch rate before playback scheduling.
 - `AudioBufferSourceNode.playbackRate` remains available as an emergency fallback, but it is not pitch-preserving.
 - `signalsmith-stretch` remains isolated behind `BrowserAudioEngine`; React components do not call the stretch library directly.
-- Offline arrangement WAV export stretch remains deferred to issue #6.
+- Offline arrangement WAV export stretch is covered by `docs/features/28-bpm-aware-imported-audio-wav-export.md`.
 
 ## Done when
 
@@ -136,4 +137,4 @@ Manual check:
 - Explain where source BPM is stored.
 - Explain the stretch-rate calculation.
 - Explain why BPM changes affect imported audio from the next playback start only.
-- Mention that offline WAV export stretch support is deferred to issue #6.
+- Mention that offline WAV export stretch support is covered separately by `docs/features/28-bpm-aware-imported-audio-wav-export.md`.

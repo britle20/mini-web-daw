@@ -57,13 +57,17 @@ BPM-aware imported audio playback requires source BPM metadata for newly importe
 stretchRate = projectBpm / sourceBpm
 ```
 
-The stretch path preserves pitch and lives inside the audio engine. `signalsmith-stretch` is a justified production dependency because the Web Audio API does not provide high-quality pitch-preserving time stretching natively. Keep the dependency behind the typed audio-engine API and do not call it from React components. The local spike showed that the browser AudioWorklet/WASM path can produce the desired sound; arrangement integration should follow the same scheduling shape by passing both `output` and `outputTime` when activating the stretch node.
+The stretch path preserves pitch and lives inside the audio engine. `signalsmith-stretch` is a justified production dependency because the Web Audio API does not provide high-quality pitch-preserving time stretching natively. Keep the dependency behind the typed audio-engine API and do not call it from React components.
+
+The adopted live playback path pre-renders stretched imported sample buffers before scheduling them. Non-unity stretch rates are rendered through `signalsmith-stretch` in an offline context, cached by sample ID, sample cache version, and normalized stretch rate, then played with ordinary `AudioBufferSourceNode` scheduling. This avoids the fragile behavior seen when live stretch nodes are started too close to `AudioContext.currentTime`.
+
+Derived stretch caches must be invalidated when imported sample data is replaced or relinked. Project BPM changes should produce a different stretch-rate cache key on the next playback start.
 
 If pitch-preserving stretch has to be disabled for a browser-specific issue, imported audio clips may temporarily use an `AudioBufferSourceNode.playbackRate` fallback derived from `projectBpm / sourceBpm`. This keeps clips audible and tempo-following, but it does not preserve pitch and should be treated as a fallback rather than the target behavior.
 
 Project BPM changes should apply to imported audio stretch on the next playback start. Do not attempt live stretch-ratio changes for already-playing imported audio in the first implementation.
 
-When a loop contains stretched imported audio, the scheduler should start against an audio time far enough in the future for the stretch node to compensate for its own latency. Increasing the lookahead window alone is not enough if the first event is still scheduled at `AudioContext.currentTime`.
+When a loop contains stretched imported audio, the scheduler should ensure stretched buffers are ready before starting playback. Scheduling ordinary buffer sources from pre-rendered stretch output is preferred over creating per-clip live stretch nodes.
 
 ## Arrangement Playback
 

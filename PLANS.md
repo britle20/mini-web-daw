@@ -6,12 +6,10 @@ Create a browser-first, clip-oriented mini DAW that is useful for making electro
 
 ## Current Milestone: Editing Foundations
 
-The current queue is focused on cleaning up adopted spike notes, expanding editing tools, and making arrangement-level structure more usable.
+The current queue is focused on expanding editing tools and making arrangement-level structure more usable.
 
 Focus:
 
-- Fold useful Signalsmith Stretch spike findings into permanent docs.
-- Remove the temporary `docs/spikes/` directory after its durable context is preserved.
 - Add useful oscillator-based synth instrument presets through an audition-and-select workflow.
 - Add multi-note piano roll editing so short phrases can be moved, deleted, and copied as groups.
 - Add multi-clip arrangement editing so song sections can be moved, deleted, and copied as groups.
@@ -23,14 +21,13 @@ Focus:
 
 ## Active Issue Order
 
-1. #16 Docs: fold Signalsmith spike notes into permanent docs -> docs cleanup, no feature spec
-2. #17 Add oscillator synth instrument presets -> `docs/features/29-oscillator-synth-instrument-presets.md`
-3. #19 Add piano roll multi-note selection and editing -> `docs/features/30-piano-roll-multi-note-editing.md`
-4. #20 Add arrangement multi-clip selection and clipboard editing -> `docs/features/31-arrangement-multi-clip-editing.md`
-5. #22 Add undo and redo history -> `docs/features/32-undo-redo-history.md`
-6. #21 Add velocity editing for drum and piano roll events -> `docs/features/33-velocity-editing.md`
-7. #23 Add clip trim and fade editing -> `docs/features/34-clip-trim-and-fade.md`
-8. #24 Add arrangement track management -> `docs/features/35-track-management.md`
+1. #17 Add oscillator synth instrument presets -> `docs/features/29-oscillator-synth-instrument-presets.md`
+2. #19 Add piano roll multi-note selection and editing -> `docs/features/30-piano-roll-multi-note-editing.md`
+3. #20 Add arrangement multi-clip selection and clipboard editing -> `docs/features/31-arrangement-multi-clip-editing.md`
+4. #22 Add undo and redo history -> `docs/features/32-undo-redo-history.md`
+5. #21 Add velocity editing for drum and piano roll events -> `docs/features/33-velocity-editing.md`
+6. #23 Add clip trim and fade editing -> `docs/features/34-clip-trim-and-fade.md`
+7. #24 Add arrangement track management -> `docs/features/35-track-management.md`
 
 When new work is needed, create or update a feature spec under `docs/features/`, create a linked GitHub Issue, and add that issue here in priority order.
 
