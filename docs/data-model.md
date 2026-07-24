@@ -584,6 +584,8 @@ The initial visual piano roll grid has 32 columns across the 1-bar clip. At PPQ 
 
 The UI may allow left-click or drag creation, dragging existing notes to move pitch/time, and right-click deletion. These interactions must update `noteEvents` in serializable clip state. Runtime audio objects used for synth playback or sample decoding must stay outside project JSON.
 
+Multi-note selection should not change the `NoteEvent` shape. Selected note IDs, selection marquee geometry, last edit position, and app-local note clipboard contents are runtime editor state. Copy/paste creates new serializable `NoteEvent` objects with new IDs; it must not store clipboard data in project JSON.
+
 ## Illustrative Types
 
 These snippets show model intent. Implementation may refine names and fields, but changes to model semantics must update this document.

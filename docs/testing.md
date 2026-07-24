@@ -35,6 +35,7 @@ CI uses `--if-present` while the repository is still before the Vite scaffold.
 - Variable hybrid clip length should cover 1, 2, and 4 bar tick lengths, editor grid derivation, shortening behavior, and arrangement default instance length.
 - WAV encoder header, duration, and sample conversion helpers: unit tests.
 - Pitched instrument metadata and sample-zone mapping: unit tests.
+- Piano roll multi-note selection, group movement, group deletion, and app-local copy/paste transforms: unit tests where practical.
 - Tempo control and scheduler tempo update behavior: unit tests where practical.
 - Mixer decibel-to-gain conversion and mute/solo effective-gain logic: unit tests.
 - Mixer state transformations for volume, mute, solo, and master volume: unit tests.
@@ -132,6 +133,7 @@ Manual audio checks should verify:
 - When sampler sustain metadata exists, long sample-based notes should sustain without obvious repeated attacks as much as the sample material allows.
 - If sampler sustain metadata is missing or invalid, sample-based notes should fall back to one-shot playback rather than stuck or unstable sustain.
 - Instrument switching changes piano roll playback sound without mutating existing note events.
+- Piano roll multi-note editing checks should verify Ctrl/Cmd-click toggling, box selection, selected-note visual state, group drag behavior, Delete/Backspace deletion, and app-local copy/paste if included.
 - Oscillator synth preset checks should verify that approved presets can be added to clips, sound distinct in `PAT` and `SONG` playback, render in arrangement WAV export, and rejected audition candidates are absent from the final UI.
 - Tempo changes behave as documented for the current milestone.
 - Mixer UI shell checks should verify fader, mute, solo, meter placeholder, and effect slot visuals without implying real audio routing.

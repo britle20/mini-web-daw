@@ -316,8 +316,15 @@ The initial piano roll should use a compact C4-C5 pitch range that matches the b
 - Use left-click drag on empty grid space to create a longer note.
 - Use left-click drag on an existing note to move its pitch and start tick.
 - Use right-click on an existing note to delete it.
+- Use Ctrl/Cmd-click on existing notes to add or remove notes from the current selection.
+- Use empty-grid drag for box selection when the pointer gesture is not creating a note.
+- Use Delete or Backspace to delete selected notes.
 - Store the result in serializable `noteEvents`; do not store UI geometry as project data.
 - Use inline styles only for computed note geometry such as top, left, width, and height.
+
+Multi-note editing should preserve existing single-note workflows. Selected notes should have a clear visual state, and dragging one selected note should move the selected group together while preserving relative timing and pitch offsets.
+
+The first copy/paste behavior should use an app-local note clipboard. Ctrl/Cmd+C copies selected notes from the current clip and pitched instrument. Ctrl/Cmd+V pastes into the current clip and pitched instrument, creates new note IDs, preserves relative tick and pitch spacing, and selects the pasted notes. Do not use the OS clipboard or persist clipboard state in project data for the first version.
 
 ## Pitched Instrument Selection
 
