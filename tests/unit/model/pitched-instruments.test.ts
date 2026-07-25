@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_NAIVE_SAW_INSTRUMENT,
   AUDITION_PLUCK_INSTRUMENT,
   AUDITION_SOFT_PAD_INSTRUMENT,
   AUDITION_SUB_BASS_INSTRUMENT,
@@ -22,6 +23,7 @@ describe("pitched instruments", () => {
       DEFAULT_SYNTH_INSTRUMENT,
       IOWA_PIANO_INSTRUMENT,
       AUDITION_SUB_BASS_INSTRUMENT,
+      AUDITION_NAIVE_SAW_INSTRUMENT,
       AUDITION_ACID_LEAD_INSTRUMENT,
       AUDITION_SOFT_PAD_INSTRUMENT,
       AUDITION_PLUCK_INSTRUMENT,
@@ -93,6 +95,9 @@ describe("pitched instruments", () => {
     expect(getPitchedInstrument("audition-sub-bass")).toBe(
       AUDITION_SUB_BASS_INSTRUMENT,
     );
+    expect(getPitchedInstrument("audition-naive-sawtooth")).toBe(
+      AUDITION_NAIVE_SAW_INSTRUMENT,
+    );
     expect(getPitchedInstrument("audition-acid-lead")).toBe(
       AUDITION_ACID_LEAD_INSTRUMENT,
     );
@@ -117,7 +122,22 @@ describe("pitched instruments", () => {
         type: "triangle",
       },
     });
-    expect(getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT)).toMatchObject({
+    expect(getSynthPresetForInstrument(AUDITION_NAIVE_SAW_INSTRUMENT)).toEqual(
+      {
+        envelope: {
+          attackSeconds: 0.006,
+          releaseSeconds: 0.06,
+          sustainGain: 0.9,
+        },
+        oscillator: {
+          gain: 0.72,
+          type: "sawtooth",
+        },
+      },
+    );
+    expect(
+      getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT),
+    ).toMatchObject({
       accent: {
         decaySeconds: 0.08,
         filterPeakMultiplier: 1.35,

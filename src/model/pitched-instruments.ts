@@ -146,6 +146,23 @@ export const AUDITION_SUB_BASS_INSTRUMENT = {
   },
 } as const satisfies PitchedInstrumentMeta;
 
+export const AUDITION_NAIVE_SAW_INSTRUMENT = {
+  id: "audition-naive-sawtooth",
+  kind: "synth",
+  name: "Audition Naive Saw",
+  synthPreset: {
+    envelope: {
+      attackSeconds: 0.006,
+      releaseSeconds: 0.06,
+      sustainGain: 0.9,
+    },
+    oscillator: {
+      gain: 0.72,
+      type: "sawtooth",
+    },
+  },
+} as const satisfies PitchedInstrumentMeta;
+
 export const AUDITION_ACID_LEAD_INSTRUMENT = {
   id: "audition-acid-lead",
   kind: "synth",
@@ -254,6 +271,7 @@ export const PITCHED_INSTRUMENTS = [
   DEFAULT_SYNTH_INSTRUMENT,
   IOWA_PIANO_INSTRUMENT,
   AUDITION_SUB_BASS_INSTRUMENT,
+  AUDITION_NAIVE_SAW_INSTRUMENT,
   AUDITION_ACID_LEAD_INSTRUMENT,
   AUDITION_SOFT_PAD_INSTRUMENT,
   AUDITION_PLUCK_INSTRUMENT,

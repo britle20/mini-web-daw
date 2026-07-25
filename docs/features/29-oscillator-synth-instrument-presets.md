@@ -71,6 +71,7 @@ The final PR should document which candidates were accepted and remove rejected 
 Current audition candidates exposed by the implementation branch:
 
 - `audition-sub-bass`: triangle oscillator with a low-pass filter and stable low-frequency envelope.
+- `audition-naive-sawtooth`: plain sawtooth oscillator with only a simple amplitude envelope.
 - `audition-acid-lead`: sawtooth oscillator with resonant low-pass cutoff sweep, per-note glide, and accent-style transient.
 - `audition-soft-pad`: sine oscillator with slower attack/release and a muted low-pass filter.
 - `audition-pluck`: square oscillator with a short pluck-style envelope.

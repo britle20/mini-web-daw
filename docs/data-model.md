@@ -496,6 +496,7 @@ Built-in oscillator instruments use the same pitched instrument list rather than
 The oscillator preset audition branch currently exposes temporary candidate IDs:
 
 - `audition-sub-bass`.
+- `audition-naive-sawtooth`.
 - `audition-acid-lead`.
 - `audition-soft-pad`.
 - `audition-pluck`.

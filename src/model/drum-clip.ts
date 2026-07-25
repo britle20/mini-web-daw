@@ -9,6 +9,7 @@ export type PitchedInstrumentId =
   | "default-synth"
   | "iowa-piano"
   | "audition-sub-bass"
+  | "audition-naive-sawtooth"
   | "audition-acid-lead"
   | "audition-soft-pad"
   | "audition-pluck";
