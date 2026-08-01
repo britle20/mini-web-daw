@@ -70,6 +70,8 @@ interface NoteGeometry {
 
 const BEATS_PER_BAR = 4;
 const PIANO_ROLL_COLUMNS_PER_BEAT = PIANO_ROLL_COLUMNS_PER_BAR / BEATS_PER_BAR;
+const EMPTY_ROLL_DEFAULT_LOW_MIDI_NOTE = 60;
+const EMPTY_ROLL_DEFAULT_HIGH_MIDI_NOTE = 72;
 
 export function PianoRoll({
   clipLengthTicks,
@@ -87,7 +89,7 @@ export function PianoRoll({
   const [movingNote, setMovingNote] = useState<MovingNote | null>(null);
   const [gridScrollTop, setGridScrollTop] = useState(0);
   const [initialCenteredRowIndex] = useState(() =>
-    getFirstVisibleNoteRowIndex({ noteEvents, pitches }),
+    getInitialCenteredRowIndex({ noteEvents, pitches }),
   );
   const pianoRows = pitches.map((pitch) => ({
     id: `midi-${pitch.midiNote}`,
@@ -491,6 +493,19 @@ function getNoteGeometry(
   };
 }
 
+function getInitialCenteredRowIndex({
+  noteEvents,
+  pitches,
+}: {
+  noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
+}): number | null {
+  return (
+    getFirstVisibleNoteRowIndex({ noteEvents, pitches }) ??
+    getEmptyRollDefaultRowIndex(pitches)
+  );
+}
+
 function getFirstVisibleNoteRowIndex({
   noteEvents,
   pitches,
@@ -521,6 +536,32 @@ function getFirstVisibleNoteRowIndex({
   }
 
   return firstNoteRowIndex;
+}
+
+function getEmptyRollDefaultRowIndex(
+  pitches: readonly PianoRollPitch[],
+): number | null {
+  if (pitches.length === 0) {
+    return null;
+  }
+
+  const defaultCenterMidiNote =
+    (EMPTY_ROLL_DEFAULT_LOW_MIDI_NOTE + EMPTY_ROLL_DEFAULT_HIGH_MIDI_NOTE) / 2;
+  let closestPitchIndex = 0;
+  let closestDistance = Math.abs(pitches[0]!.midiNote - defaultCenterMidiNote);
+
+  for (let pitchIndex = 1; pitchIndex < pitches.length; pitchIndex += 1) {
+    const distance = Math.abs(
+      pitches[pitchIndex]!.midiNote - defaultCenterMidiNote,
+    );
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestPitchIndex = pitchIndex;
+    }
+  }
+
+  return closestPitchIndex;
 }
 
 function getNoteStyle({
