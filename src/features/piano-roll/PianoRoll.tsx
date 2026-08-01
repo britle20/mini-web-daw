@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type MouseEvent,
   type PointerEvent,
+  type WheelEvent as ReactWheelEvent,
   useCallback,
   useRef,
   useState,
@@ -70,6 +71,8 @@ interface NoteGeometry {
 
 const BEATS_PER_BAR = 4;
 const PIANO_ROLL_COLUMNS_PER_BEAT = PIANO_ROLL_COLUMNS_PER_BAR / BEATS_PER_BAR;
+const WHEEL_DELTA_LINE_MODE = 1;
+const WHEEL_DELTA_PAGE_MODE = 2;
 const EMPTY_ROLL_DEFAULT_LOW_MIDI_NOTE = 60;
 const EMPTY_ROLL_DEFAULT_HIGH_MIDI_NOTE = 72;
 
@@ -85,6 +88,7 @@ export function PianoRoll({
   onNoteMove,
 }: PianoRollProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const verticalWheelRemainderRef = useRef(0);
   const [draftNote, setDraftNote] = useState<DraftNote | null>(null);
   const [movingNote, setMovingNote] = useState<MovingNote | null>(null);
   const [gridScrollTop, setGridScrollTop] = useState(0);
@@ -136,7 +140,7 @@ export function PianoRoll({
         const centeredScrollTop =
           rowHeight * (initialCenteredRowIndex + 0.5) - visibleNoteHeight / 2;
         const nextScrollTop = clamp(
-          centeredScrollTop,
+          snapScrollTopToRow(centeredScrollTop, rowHeight),
           0,
           Math.max(element.scrollHeight - element.clientHeight, 0),
         );
@@ -147,6 +151,48 @@ export function PianoRoll({
     },
     [initialCenteredRowIndex, pitches.length],
   );
+
+  function handleGridViewportWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    const gridElement = gridRef.current;
+
+    if (
+      !gridElement ||
+      event.ctrlKey ||
+      Math.abs(event.deltaY) <= Math.abs(event.deltaX)
+    ) {
+      return;
+    }
+
+    const rowHeight = getRenderedRowHeight(gridElement, pitches.length);
+
+    if (rowHeight <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+    verticalWheelRemainderRef.current += getWheelDeltaPixels(event, rowHeight);
+
+    const rowDelta = Math.trunc(verticalWheelRemainderRef.current / rowHeight);
+
+    if (rowDelta === 0) {
+      return;
+    }
+
+    verticalWheelRemainderRef.current -= rowDelta * rowHeight;
+
+    const viewportElement = event.currentTarget;
+    const nextScrollTop = clamp(
+      snapScrollTopToRow(
+        viewportElement.scrollTop + rowDelta * rowHeight,
+        rowHeight,
+      ),
+      0,
+      Math.max(viewportElement.scrollHeight - viewportElement.clientHeight, 0),
+    );
+
+    viewportElement.scrollTop = nextScrollTop;
+    setGridScrollTop(nextScrollTop);
+  }
 
   function handleGridPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) {
@@ -354,6 +400,7 @@ export function PianoRoll({
           <div
             className={styles.gridViewport}
             onScroll={(event) => setGridScrollTop(event.currentTarget.scrollTop)}
+            onWheel={handleGridViewportWheel}
             ref={handleGridViewportRef}
           >
             <div
@@ -562,6 +609,40 @@ function getEmptyRollDefaultRowIndex(
   }
 
   return closestPitchIndex;
+}
+
+function getRenderedRowHeight(
+  gridElement: HTMLElement,
+  pitchCount: number,
+): number {
+  if (pitchCount <= 0) {
+    return 0;
+  }
+
+  return gridElement.getBoundingClientRect().height / pitchCount;
+}
+
+function getWheelDeltaPixels(
+  event: ReactWheelEvent<HTMLElement>,
+  rowHeight: number,
+): number {
+  if (event.deltaMode === WHEEL_DELTA_LINE_MODE) {
+    return event.deltaY * rowHeight;
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_PAGE_MODE) {
+    return event.deltaY * rowHeight * 13;
+  }
+
+  return event.deltaY;
+}
+
+function snapScrollTopToRow(scrollTop: number, rowHeight: number): number {
+  if (rowHeight <= 0) {
+    return scrollTop;
+  }
+
+  return Math.round(scrollTop / rowHeight) * rowHeight;
 }
 
 function getNoteStyle({
