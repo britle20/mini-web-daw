@@ -366,6 +366,7 @@ The piano roll pitch range depends on the selected pitched instrument.
 - Oscillator-based instruments should render C7 down to C1 and allow vertical scrolling.
 - Sample-based instruments should render only pitches with available sample zones. The initial `Iowa Piano` renders C5 down to C4 because those are the bundled WAV files.
 - Hide the vertical scrollbar UI where practical while preserving mouse wheel or trackpad vertical scrolling.
+- When opening a clip/instrument piano roll that already has notes, center the earliest visible note pitch in the initial viewport.
 - Render 32 columns across the 1-bar clip.
 - Use left-click to create a short note.
 - Use left-click drag on empty grid space to create a longer note.

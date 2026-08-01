@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type MouseEvent,
   type PointerEvent,
+  useCallback,
   useRef,
   useState,
 } from "react";
@@ -85,6 +86,9 @@ export function PianoRoll({
   const [draftNote, setDraftNote] = useState<DraftNote | null>(null);
   const [movingNote, setMovingNote] = useState<MovingNote | null>(null);
   const [gridScrollTop, setGridScrollTop] = useState(0);
+  const [initialCenteredRowIndex] = useState(() =>
+    getFirstVisibleNoteRowIndex({ noteEvents, pitches }),
+  );
   const pianoRows = pitches.map((pitch) => ({
     id: `midi-${pitch.midiNote}`,
     keyType: pitch.keyType,
@@ -104,6 +108,43 @@ export function PianoRoll({
     gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
     width: `calc(100% * ${barCount})`,
   } as CSSProperties;
+  const handleGridViewportRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element || initialCenteredRowIndex === null) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        const gridElement = gridRef.current;
+
+        if (!gridElement) {
+          return;
+        }
+
+        const rowHeight =
+          gridElement.getBoundingClientRect().height / Math.max(pitches.length, 1);
+        const headerHeight =
+          element
+            .querySelector(`.${styles.beatHeader}`)
+            ?.getBoundingClientRect().height ?? 0;
+        const visibleNoteHeight = Math.max(
+          element.clientHeight - headerHeight,
+          rowHeight,
+        );
+        const centeredScrollTop =
+          rowHeight * (initialCenteredRowIndex + 0.5) - visibleNoteHeight / 2;
+        const nextScrollTop = clamp(
+          centeredScrollTop,
+          0,
+          Math.max(element.scrollHeight - element.clientHeight, 0),
+        );
+
+        element.scrollTop = nextScrollTop;
+        setGridScrollTop(nextScrollTop);
+      });
+    },
+    [initialCenteredRowIndex, pitches.length],
+  );
 
   function handleGridPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) {
@@ -311,6 +352,7 @@ export function PianoRoll({
           <div
             className={styles.gridViewport}
             onScroll={(event) => setGridScrollTop(event.currentTarget.scrollTop)}
+            ref={handleGridViewportRef}
           >
             <div
               className={styles.beatHeader}
@@ -447,6 +489,38 @@ function getNoteGeometry(
     ),
     rowIndex,
   };
+}
+
+function getFirstVisibleNoteRowIndex({
+  noteEvents,
+  pitches,
+}: {
+  noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
+}): number | null {
+  let firstNote: NoteEvent | null = null;
+  let firstNoteRowIndex: number | null = null;
+
+  for (const note of noteEvents) {
+    const rowIndex = pitches.findIndex(
+      (pitch) => pitch.midiNote === note.midiNote,
+    );
+
+    if (rowIndex < 0) {
+      continue;
+    }
+
+    if (
+      !firstNote ||
+      note.startTick < firstNote.startTick ||
+      (note.startTick === firstNote.startTick && note.midiNote > firstNote.midiNote)
+    ) {
+      firstNote = note;
+      firstNoteRowIndex = rowIndex;
+    }
+  }
+
+  return firstNoteRowIndex;
 }
 
 function getNoteStyle({

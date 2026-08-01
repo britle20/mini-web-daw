@@ -3108,7 +3108,9 @@ export function App() {
                 <PianoRoll
                   clipLengthTicks={selectedHybridClip.lengthTicks}
                   instrumentName={selectedPitchedInstrumentName}
-                  key={selectedPitchedInstrument?.id ?? "no-pitched-instrument"}
+                  key={`${selectedHybridClip.id}:${
+                    selectedPitchedInstrument?.id ?? "no-pitched-instrument"
+                  }`}
                   noteEvents={selectedPitchedNoteEvents}
                   onNoteCreate={handleNoteCreate}
                   onNoteDelete={handleNoteDelete}
