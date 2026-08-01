@@ -34,6 +34,8 @@ Included:
 - Play selected preset notes from piano roll `PAT` playback.
 - Play selected preset notes from arrangement `SONG` playback.
 - Include selected preset notes in arrangement WAV export.
+- Let oscillator-based synth presets use the wider C1-C7 piano roll range because their pitches are generated directly from MIDI note numbers.
+- Keep sample-based instruments limited to their available sample zones in the piano roll. The current `Iowa Piano` remains C4-C5 only.
 - Add focused tests for preset metadata, instrument lookup, and scheduling/export routing where practical.
 
 Excluded:
@@ -129,6 +131,8 @@ Implementation may refine names and fields, but any model semantics must be refl
 - Piano roll notes owned by selected presets play in `PAT` playback.
 - Arrangement playback includes selected preset notes in `SONG` mode.
 - Arrangement WAV export includes selected preset notes.
+- Oscillator-based candidates expose C1-C7 note rows in the piano roll with vertical scrolling.
+- `Iowa Piano` only exposes its C4-C5 sample-backed notes in the piano roll.
 - Existing sample-based `Iowa Piano` behavior remains intact.
 
 ## Verification

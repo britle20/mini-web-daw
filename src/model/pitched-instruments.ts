@@ -1,6 +1,9 @@
 import {
+  IOWA_PIANO_SAMPLE_PITCHES,
   PIANO_ROLL_PITCHES,
+  createPianoRollPitchFromMidiNote,
   type PitchedInstrumentId,
+  type PianoRollPitch,
 } from "./drum-clip";
 
 export { DEFAULT_PITCHED_INSTRUMENT_ID } from "./drum-clip";
@@ -248,7 +251,7 @@ export const IOWA_PIANO_INSTRUMENT = {
   id: "iowa-piano",
   kind: "sample",
   name: "Iowa Piano",
-  zones: PIANO_ROLL_PITCHES.map((pitch) => {
+  zones: IOWA_PIANO_SAMPLE_PITCHES.map((pitch) => {
     const sampleStartSeconds =
       IOWA_PIANO_SAMPLE_START_SECONDS[pitch.midiNote] ?? 0;
 
@@ -305,4 +308,18 @@ export function getSynthPresetForInstrument(
   instrument: PitchedInstrumentMeta,
 ): SynthPresetMeta {
   return instrument.synthPreset ?? DEFAULT_SYNTH_PRESET;
+}
+
+export function getPianoRollPitchesForInstrument(
+  instrument: PitchedInstrumentMeta,
+): readonly PianoRollPitch[] {
+  if (instrument.kind !== "sample") {
+    return PIANO_ROLL_PITCHES;
+  }
+
+  return [...(instrument.zones ?? [])]
+    .sort((left, right) => right.midiNote - left.midiNote)
+    .map((zone) =>
+      createPianoRollPitchFromMidiNote(zone.midiNote, zone.sampleId),
+    );
 }

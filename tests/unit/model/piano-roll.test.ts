@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  IOWA_PIANO_SAMPLE_PITCHES,
   PIANO_ROLL_COLUMN_COUNT,
   PIANO_ROLL_PITCHES,
   TICKS_PER_PIANO_ROLL_COLUMN,
@@ -33,19 +34,37 @@ describe("piano roll model", () => {
     );
   });
 
-  it("defines the initial C4 through C5 piano pitch range", () => {
-    expect(PIANO_ROLL_PITCHES).toHaveLength(13);
+  it("defines the synth piano roll pitch range from C1 through C7", () => {
+    expect(PIANO_ROLL_PITCHES).toHaveLength(73);
     expect(PIANO_ROLL_PITCHES[0]).toMatchObject({
+      label: "C7",
+      midiNote: 96,
+    });
+    expect(PIANO_ROLL_PITCHES.at(-1)).toMatchObject({
+      label: "C1",
+      midiNote: 24,
+    });
+    expect(getPianoRollPitchByMidiNote(36)).toMatchObject({
+      label: "C2",
+      midiNote: 36,
+    });
+  });
+
+  it("defines Iowa Piano sample pitches from C4 through C5", () => {
+    expect(IOWA_PIANO_SAMPLE_PITCHES).toHaveLength(13);
+    expect(IOWA_PIANO_SAMPLE_PITCHES[0]).toMatchObject({
       label: "C5",
       midiNote: 72,
       sampleId: "iowa-piano-c5",
     });
-    expect(PIANO_ROLL_PITCHES.at(-1)).toMatchObject({
+    expect(IOWA_PIANO_SAMPLE_PITCHES.at(-1)).toMatchObject({
       label: "C4",
       midiNote: 60,
       sampleId: "iowa-piano-c4",
     });
-    expect(getPianoRollPitchByMidiNote(61)).toMatchObject({
+    expect(
+      getPianoRollPitchByMidiNote(61, IOWA_PIANO_SAMPLE_PITCHES),
+    ).toMatchObject({
       label: "Db4",
       sampleId: "iowa-piano-db4",
     });

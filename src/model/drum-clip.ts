@@ -43,8 +43,10 @@ export interface PianoRollPitch {
   keyType: "white" | "black";
   label: string;
   midiNote: number;
-  sampleId: string;
+  sampleId?: string;
 }
+
+export type PianoRollSamplePitch = PianoRollPitch & { sampleId: string };
 
 export interface HybridClip {
   kind: "hybrid";
@@ -97,86 +99,75 @@ export const PIANO_ROLL_COLUMN_COUNT = PIANO_ROLL_COLUMNS_PER_BAR;
 export const TICKS_PER_PIANO_ROLL_COLUMN =
   TICKS_PER_4_4_BAR / PIANO_ROLL_COLUMN_COUNT;
 
-export const PIANO_ROLL_PITCHES = [
-  {
-    keyType: "white",
-    label: "C5",
-    midiNote: 72,
-    sampleId: "iowa-piano-c5",
-  },
-  {
-    keyType: "white",
-    label: "B4",
-    midiNote: 71,
-    sampleId: "iowa-piano-b4",
-  },
-  {
-    keyType: "black",
-    label: "Bb4",
-    midiNote: 70,
-    sampleId: "iowa-piano-bb4",
-  },
-  {
-    keyType: "white",
-    label: "A4",
-    midiNote: 69,
-    sampleId: "iowa-piano-a4",
-  },
-  {
-    keyType: "black",
-    label: "Ab4",
-    midiNote: 68,
-    sampleId: "iowa-piano-ab4",
-  },
-  {
-    keyType: "white",
-    label: "G4",
-    midiNote: 67,
-    sampleId: "iowa-piano-g4",
-  },
-  {
-    keyType: "black",
-    label: "Gb4",
-    midiNote: 66,
-    sampleId: "iowa-piano-gb4",
-  },
-  {
-    keyType: "white",
-    label: "F4",
-    midiNote: 65,
-    sampleId: "iowa-piano-f4",
-  },
-  {
-    keyType: "white",
-    label: "E4",
-    midiNote: 64,
-    sampleId: "iowa-piano-e4",
-  },
-  {
-    keyType: "black",
-    label: "Eb4",
-    midiNote: 63,
-    sampleId: "iowa-piano-eb4",
-  },
-  {
-    keyType: "white",
-    label: "D4",
-    midiNote: 62,
-    sampleId: "iowa-piano-d4",
-  },
-  {
-    keyType: "black",
-    label: "Db4",
-    midiNote: 61,
-    sampleId: "iowa-piano-db4",
-  },
-  {
-    keyType: "white",
-    label: "C4",
-    midiNote: 60,
-    sampleId: "iowa-piano-c4",
-  },
-] as const satisfies readonly PianoRollPitch[];
+const PITCH_CLASS_LABELS = [
+  "C",
+  "Db",
+  "D",
+  "Eb",
+  "E",
+  "F",
+  "Gb",
+  "G",
+  "Ab",
+  "A",
+  "Bb",
+  "B",
+] as const;
+const BLACK_KEY_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
+
+export const PIANO_ROLL_PITCHES: readonly PianoRollPitch[] =
+  createPianoRollPitchRange({
+    highestMidiNote: 96,
+    lowestMidiNote: 24,
+  });
+
+export const IOWA_PIANO_SAMPLE_PITCHES: readonly PianoRollSamplePitch[] =
+  createPianoRollPitchRange({
+    highestMidiNote: 72,
+    lowestMidiNote: 60,
+  }).map((pitch) => ({
+    ...pitch,
+    sampleId: `iowa-piano-${pitch.label.toLowerCase()}`,
+  }));
+
+export function createPianoRollPitchFromMidiNote(
+  midiNote: number,
+  sampleId?: string,
+): PianoRollPitch {
+  validateMidiNote(midiNote);
+
+  const pitchClass = midiNote % 12;
+  const octave = Math.floor(midiNote / 12) - 1;
+
+  return {
+    keyType: BLACK_KEY_PITCH_CLASSES.has(pitchClass) ? "black" : "white",
+    label: `${PITCH_CLASS_LABELS[pitchClass]}${octave}`,
+    midiNote,
+    ...(sampleId ? { sampleId } : {}),
+  };
+}
+
+function createPianoRollPitchRange({
+  highestMidiNote,
+  lowestMidiNote,
+}: {
+  highestMidiNote: number;
+  lowestMidiNote: number;
+}): PianoRollPitch[] {
+  validateMidiNote(lowestMidiNote);
+  validateMidiNote(highestMidiNote);
+
+  if (highestMidiNote < lowestMidiNote) {
+    throw new Error(
+      `highestMidiNote must be greater than or equal to lowestMidiNote. Received ${highestMidiNote}-${lowestMidiNote}.`,
+    );
+  }
+
+  return Array.from(
+    { length: highestMidiNote - lowestMidiNote + 1 },
+    (_, index) => createPianoRollPitchFromMidiNote(highestMidiNote - index),
+  );
+}
 
 export function createEmptyHybridClip({
   id = "clip-1",
@@ -664,8 +655,9 @@ export function getPianoRollColumnStartTick(
 
 export function getPianoRollPitchByMidiNote(
   midiNote: number,
+  pitches: readonly PianoRollPitch[] = PIANO_ROLL_PITCHES,
 ): PianoRollPitch | undefined {
-  return PIANO_ROLL_PITCHES.find((pitch) => pitch.midiNote === midiNote);
+  return pitches.find((pitch) => pitch.midiNote === midiNote);
 }
 
 export function addNoteEvent({

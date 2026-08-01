@@ -47,6 +47,7 @@ import {
   getClipInstancesOutsideArrangementLength,
   isValidImportedAudioSourceBpm,
   getPitchedInstrument,
+  getPianoRollPitchesForInstrument,
   hasHybridClipEventsOutsideLength,
   hasNoteEventsForPitchedInstrument,
   isAudioClip,
@@ -393,9 +394,15 @@ export function App() {
   const hasSelectedPitchedInstrument =
     selectedHybridClip?.pitchedInstrumentIds.includes(selectedPitchedInstrumentId) ??
     false;
+  const selectedPitchedInstrument = hasSelectedPitchedInstrument
+    ? getPitchedInstrument(selectedPitchedInstrumentId)
+    : null;
   const selectedPitchedInstrumentName = hasSelectedPitchedInstrument
-    ? getPitchedInstrument(selectedPitchedInstrumentId).name
+    ? selectedPitchedInstrument?.name ?? "-"
     : "-";
+  const selectedPianoRollPitches = selectedPitchedInstrument
+    ? getPianoRollPitchesForInstrument(selectedPitchedInstrument)
+    : [];
   const selectedPitchedNoteEvents = hasSelectedPitchedInstrument
     ? selectedHybridClip?.noteEvents.filter(
         (event) => event.instrumentId === selectedPitchedInstrumentId,
@@ -3101,10 +3108,12 @@ export function App() {
                 <PianoRoll
                   clipLengthTicks={selectedHybridClip.lengthTicks}
                   instrumentName={selectedPitchedInstrumentName}
+                  key={selectedPitchedInstrument?.id ?? "no-pitched-instrument"}
                   noteEvents={selectedPitchedNoteEvents}
                   onNoteCreate={handleNoteCreate}
                   onNoteDelete={handleNoteDelete}
                   onNoteMove={handleNoteMove}
+                  pitches={selectedPianoRollPitches}
                   playheadTick={playheadTick}
                   shouldShowPlayhead={shouldShowPlayhead}
                 />

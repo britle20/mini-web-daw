@@ -623,14 +623,6 @@ function scheduleOfflineNoteEvent({
   });
 
   if (!sampleZone) {
-    scheduleOfflineSynthNote({
-      audioContext,
-      durationTicks,
-      event,
-      mixerOptions,
-      synthPreset: DEFAULT_SYNTH_PRESET,
-      tempoBpm,
-    });
     return;
   }
 

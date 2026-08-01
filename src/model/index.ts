@@ -33,6 +33,7 @@ export {
   DRUM_STEPS_PER_BAR,
   DRUM_STEP_SUBDIVISIONS,
   HYBRID_CLIP_LENGTH_BARS,
+  IOWA_PIANO_SAMPLE_PITCHES,
   INITIAL_PITCHED_INSTRUMENT_IDS,
   PIANO_ROLL_COLUMN_COUNT,
   PIANO_ROLL_COLUMNS_PER_BAR,
@@ -41,6 +42,7 @@ export {
   addPitchedInstrumentToClip,
   addNoteEvent,
   createEmptyHybridClip,
+  createPianoRollPitchFromMidiNote,
   deleteNoteEvent,
   getDrumSubstepStartTick,
   getDrumSubstepTicks,
@@ -134,6 +136,7 @@ export {
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
+  getPianoRollPitchesForInstrument,
   getSampleZoneForMidiNote,
   getSynthPresetForInstrument,
 } from "./pitched-instruments";
@@ -154,6 +157,7 @@ export type {
   HybridClipLengthBars,
   NoteEvent,
   PianoRollPitch,
+  PianoRollSamplePitch,
 } from "./drum-clip";
 export type {
   AudioClip,

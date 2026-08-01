@@ -12,6 +12,7 @@ import {
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
+  getPianoRollPitchesForInstrument,
   getSampleZoneForMidiNote,
   getSynthPresetForInstrument,
 } from "../../../src/model";
@@ -108,6 +109,28 @@ describe("pitched instruments", () => {
       AUDITION_PLUCK_INSTRUMENT,
     );
     expect(getPitchedInstrument("iowa-piano")).toBe(IOWA_PIANO_INSTRUMENT);
+  });
+
+  it("uses wide synth pitches and exact sample pitches for piano roll editing", () => {
+    const synthPitches =
+      getPianoRollPitchesForInstrument(AUDITION_SUB_BASS_INSTRUMENT);
+    const iowaPianoPitches =
+      getPianoRollPitchesForInstrument(IOWA_PIANO_INSTRUMENT);
+
+    expect(synthPitches).toHaveLength(73);
+    expect(synthPitches[0]).toMatchObject({ label: "C7", midiNote: 96 });
+    expect(synthPitches.at(-1)).toMatchObject({ label: "C1", midiNote: 24 });
+    expect(iowaPianoPitches).toHaveLength(13);
+    expect(iowaPianoPitches[0]).toMatchObject({
+      label: "C5",
+      midiNote: 72,
+      sampleId: "iowa-piano-c5",
+    });
+    expect(iowaPianoPitches.at(-1)).toMatchObject({
+      label: "C4",
+      midiNote: 60,
+      sampleId: "iowa-piano-c4",
+    });
   });
 
   it("resolves synth preset metadata for oscillator instruments", () => {

@@ -9,12 +9,12 @@ import {
 import { Panel } from "../../components";
 import {
   PIANO_ROLL_COLUMNS_PER_BAR,
-  PIANO_ROLL_PITCHES,
   TICKS_PER_PIANO_ROLL_COLUMN,
   getHybridClipBarCount,
   getPianoRollColumnCount,
   getPianoRollPitchByMidiNote,
   type NoteEvent,
+  type PianoRollPitch,
 } from "../../model";
 import { type Tick } from "../../utils";
 import { PianoKeyboard } from "./PianoKeyboard";
@@ -24,6 +24,7 @@ interface PianoRollProps {
   clipLengthTicks: Tick;
   instrumentName: string;
   noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
   playheadTick: Tick;
   shouldShowPlayhead: boolean;
   onNoteCreate: (note: {
@@ -66,12 +67,6 @@ interface NoteGeometry {
   rowIndex: number;
 }
 
-const pianoRows = PIANO_ROLL_PITCHES.map((pitch) => ({
-  id: `midi-${pitch.midiNote}`,
-  keyType: pitch.keyType,
-  label: pitch.label,
-}));
-
 const BEATS_PER_BAR = 4;
 const PIANO_ROLL_COLUMNS_PER_BEAT = PIANO_ROLL_COLUMNS_PER_BAR / BEATS_PER_BAR;
 
@@ -79,6 +74,7 @@ export function PianoRoll({
   clipLengthTicks,
   instrumentName,
   noteEvents,
+  pitches,
   playheadTick,
   shouldShowPlayhead,
   onNoteCreate,
@@ -89,6 +85,11 @@ export function PianoRoll({
   const [draftNote, setDraftNote] = useState<DraftNote | null>(null);
   const [movingNote, setMovingNote] = useState<MovingNote | null>(null);
   const [gridScrollTop, setGridScrollTop] = useState(0);
+  const pianoRows = pitches.map((pitch) => ({
+    id: `midi-${pitch.midiNote}`,
+    keyType: pitch.keyType,
+    label: pitch.label,
+  }));
   const barCount = getHybridClipBarCount(clipLengthTicks);
   const beatCount = barCount * BEATS_PER_BAR;
   const columnCount = getPianoRollColumnCount(clipLengthTicks);
@@ -147,7 +148,7 @@ export function PianoRoll({
     }
 
     const draftGeometry = getDraftNoteGeometry(draftNote);
-    const pitch = PIANO_ROLL_PITCHES[draftGeometry.rowIndex];
+    const pitch = pitches[draftGeometry.rowIndex];
 
     if (pitch) {
       onNoteCreate({
@@ -177,7 +178,7 @@ export function PianoRoll({
     }
 
     const gridPosition = getGridPosition(event);
-    const noteGeometry = getNoteGeometry(note, columnCount);
+    const noteGeometry = getNoteGeometry(note, columnCount, pitches);
 
     if (!gridPosition || !noteGeometry) {
       return;
@@ -226,7 +227,7 @@ export function PianoRoll({
       return;
     }
 
-    const pitch = PIANO_ROLL_PITCHES[movingNote.currentRowIndex];
+    const pitch = pitches[movingNote.currentRowIndex];
 
     if (pitch) {
       onNoteMove({
@@ -264,10 +265,14 @@ export function PianoRoll({
       return null;
     }
 
+    if (pitches.length === 0) {
+      return null;
+    }
+
     const rect = gridElement.getBoundingClientRect();
     const x = clamp(event.clientX - rect.left, 0, rect.width - 1);
     const y = clamp(event.clientY - rect.top, 0, rect.height - 1);
-    const rowHeight = rect.height / PIANO_ROLL_PITCHES.length;
+    const rowHeight = rect.height / pitches.length;
 
     return {
       columnIndex: clamp(
@@ -278,12 +283,12 @@ export function PianoRoll({
       rowIndex: clamp(
         Math.floor(y / rowHeight),
         0,
-        PIANO_ROLL_PITCHES.length - 1,
+        pitches.length - 1,
       ),
     };
   }
 
-  const gridHeight = `calc(var(--piano-row-height) * ${PIANO_ROLL_PITCHES.length})`;
+  const gridHeight = `calc(var(--piano-row-height) * ${pitches.length})`;
   const movingNoteId = movingNote?.noteId ?? null;
 
   return (
@@ -342,13 +347,16 @@ export function PianoRoll({
                         durationColumns: movingNote.durationColumns,
                         rowIndex: movingNote.currentRowIndex,
                       }
-                    : getNoteGeometry(note, columnCount);
+                    : getNoteGeometry(note, columnCount, pitches);
 
                 if (!noteGeometry) {
                   return null;
                 }
 
-                const pitch = getPianoRollPitchByMidiNote(note.midiNote);
+                const pitch = getPianoRollPitchByMidiNote(
+                  note.midiNote,
+                  pitches,
+                );
                 const noteLabel = pitch?.label ?? `MIDI ${note.midiNote}`;
 
                 return (
@@ -379,7 +387,7 @@ export function PianoRoll({
                     columnCount,
                   )}
                 >
-                  {PIANO_ROLL_PITCHES[draftNote.rowIndex]?.label}
+                  {pitches[draftNote.rowIndex]?.label}
                 </div>
               ) : null}
 
@@ -416,8 +424,9 @@ function getDraftNoteGeometry(draftNote: DraftNote): NoteGeometry {
 function getNoteGeometry(
   note: NoteEvent,
   columnCount: number,
+  pitches: readonly PianoRollPitch[],
 ): NoteGeometry | null {
-  const rowIndex = PIANO_ROLL_PITCHES.findIndex(
+  const rowIndex = pitches.findIndex(
     (pitch) => pitch.midiNote === note.midiNote,
   );
 

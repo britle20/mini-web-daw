@@ -891,7 +891,6 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     if (!sampleZone) {
-      this.scheduleSynthNote(event, { tempoBpm, when });
       return;
     }
 
