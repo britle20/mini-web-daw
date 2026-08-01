@@ -24,6 +24,8 @@
 .editorBody {
   display: grid;
   grid-template-columns: var(--piano-key-width) minmax(0, 1fr);
+  height: min(100%, var(--piano-editor-viewport-height));
+  max-height: var(--piano-editor-viewport-height);
   min-height: 0;
 }
 
@@ -31,7 +33,7 @@
   background: var(--color-surface-container-lowest);
   border-right: 1px solid var(--color-outline-variant);
   display: grid;
-  grid-template-rows: var(--piano-ruler-height) minmax(0, 1fr);
+  grid-template-rows: var(--piano-ruler-height) minmax(0, var(--piano-visible-rows-height));
   min-height: 0;
   overflow: hidden;
 }
@@ -74,7 +76,7 @@
 
 .gridViewport {
   display: grid;
-  grid-template-rows: var(--piano-ruler-height) minmax(0, 1fr);
+  grid-template-rows: var(--piano-ruler-height) minmax(0, var(--piano-visible-rows-height));
   min-height: 0;
   overflow-x: auto;
   overflow-y: auto;
@@ -84,7 +86,14 @@
 
 .gridViewport::-webkit-scrollbar {
   height: 10px;
-  width: 10px;
+}
+
+.gridViewport::-webkit-scrollbar:vertical {
+  width: 0;
+}
+
+.gridViewport::-webkit-scrollbar:horizontal {
+  height: 10px;
 }
 
 .gridViewport::-webkit-scrollbar-track {

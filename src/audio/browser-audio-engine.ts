@@ -21,8 +21,10 @@ import type {
   TransportSnapshot,
 } from "./types";
 import {
+  DEFAULT_SYNTH_PRESET,
   getPitchedInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
   createDefaultMasterMixerState,
   decibelsToLinearGain,
   getTrackEffectiveGain,
@@ -30,6 +32,11 @@ import {
   normalizeTrackMixerState,
   type MasterMixerState,
   type SampleZone,
+  type SynthAccentMeta,
+  type SynthFilterEnvelopeMeta,
+  type SynthFilterMeta,
+  type SynthGlideMeta,
+  type SynthPresetMeta,
   type TrackId,
   type TrackMixerState,
 } from "../model";
@@ -57,6 +64,7 @@ type ClipLoopEvent =
   | ({ kind: "sample" } & SampleLoopEvent);
 
 interface ActiveNoteVoice {
+  effectNodes?: AudioNode[];
   gainNode: GainNode;
   isReleasing: boolean;
   releaseSeconds: number;
@@ -869,7 +877,11 @@ export class BrowserAudioEngine implements AudioEngine {
     const instrument = getPitchedInstrument(event.instrumentId);
 
     if (instrument.kind !== "sample") {
-      this.scheduleSynthNote(event, { tempoBpm, when });
+      this.scheduleSynthNote(event, {
+        synthPreset: getSynthPresetForInstrument(instrument),
+        tempoBpm,
+        when,
+      });
       return;
     }
 
@@ -879,7 +891,6 @@ export class BrowserAudioEngine implements AudioEngine {
     });
 
     if (!sampleZone) {
-      this.scheduleSynthNote(event, { tempoBpm, when });
       return;
     }
 
@@ -893,9 +904,11 @@ export class BrowserAudioEngine implements AudioEngine {
   private scheduleSynthNote(
     event: NoteLoopEvent,
     {
+      synthPreset = DEFAULT_SYNTH_PRESET,
       tempoBpm,
       when,
     }: {
+      synthPreset?: SynthPresetMeta;
       tempoBpm: number;
       when: number;
     },
@@ -909,14 +922,44 @@ export class BrowserAudioEngine implements AudioEngine {
       0.01,
     );
     const stopTime = startTime + durationSeconds;
-    const attackSeconds = Math.min(0.01, durationSeconds / 4);
-    const releaseSeconds = Math.min(0.04, durationSeconds / 3);
+    const attackSeconds = Math.min(
+      synthPreset.envelope.attackSeconds,
+      durationSeconds / 4,
+    );
+    const releaseSeconds = Math.min(
+      synthPreset.envelope.releaseSeconds,
+      durationSeconds / 3,
+    );
+    const attackEndTime = startTime + attackSeconds;
     const sustainEndTime = Math.max(
-      startTime + attackSeconds,
+      attackEndTime,
       stopTime - releaseSeconds,
     );
-    const gainValue = DEFAULT_SYNTH_GAIN * (event.gain ?? 1);
+    const peakGainValue =
+      DEFAULT_SYNTH_GAIN *
+      (synthPreset.oscillator.gain ?? 1) *
+      (event.gain ?? 1);
+    const accentPeakGainValue = getSynthAccentPeakGainValue({
+      accent: synthPreset.accent,
+      peakGainValue,
+    });
+    const accentEndTime = getSynthAccentEndTime({
+      accent: synthPreset.accent,
+      attackEndTime,
+      sustainEndTime,
+    });
+    const sustainGainValue =
+      peakGainValue * (synthPreset.envelope.sustainGain ?? 1);
+    const filterNode = createSynthFilterNode({
+      audioContext,
+      accent: synthPreset.accent,
+      filter: synthPreset.filter,
+      filterEnvelope: synthPreset.filterEnvelope,
+      durationSeconds,
+      startTime,
+    });
     const synthVoice: ActiveNoteVoice = {
+      effectNodes: filterNode ? [filterNode] : undefined,
       gainNode,
       isReleasing: false,
       releaseSeconds,
@@ -924,18 +967,31 @@ export class BrowserAudioEngine implements AudioEngine {
       startTime,
     };
 
-    sourceNode.type = "triangle";
-    sourceNode.frequency.setValueAtTime(
-      midiNoteToFrequency(event.midiNote),
+    sourceNode.type = synthPreset.oscillator.type;
+    scheduleSynthPitch({
+      frequencyParam: sourceNode.frequency,
+      glide: synthPreset.glide,
+      startTime,
+      targetFrequencyHz: midiNoteToFrequency(event.midiNote),
+    });
+    sourceNode.detune.setValueAtTime(
+      synthPreset.oscillator.detuneCents ?? 0,
       startTime,
     );
 
     gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(gainValue, startTime + attackSeconds);
-    gainNode.gain.setValueAtTime(gainValue, sustainEndTime);
+    gainNode.gain.linearRampToValueAtTime(accentPeakGainValue, attackEndTime);
+    gainNode.gain.linearRampToValueAtTime(sustainGainValue, accentEndTime);
+    gainNode.gain.setValueAtTime(sustainGainValue, sustainEndTime);
     gainNode.gain.linearRampToValueAtTime(0, stopTime);
 
-    sourceNode.connect(gainNode);
+    if (filterNode) {
+      sourceNode.connect(filterNode);
+      filterNode.connect(gainNode);
+    } else {
+      sourceNode.connect(gainNode);
+    }
+
     this.connectSourceGain(gainNode, event.trackId);
     this.activeNoteVoices.add(synthVoice);
     sourceNode.addEventListener(
@@ -943,6 +999,9 @@ export class BrowserAudioEngine implements AudioEngine {
       () => {
         this.activeNoteVoices.delete(synthVoice);
         disconnectAudioNode(sourceNode);
+        for (const effectNode of synthVoice.effectNodes ?? []) {
+          disconnectAudioNode(effectNode);
+        }
         disconnectAudioNode(gainNode);
       },
       { once: true },
@@ -1117,6 +1176,9 @@ export class BrowserAudioEngine implements AudioEngine {
 
     this.activeNoteVoices.delete(noteVoice);
     disconnectAudioNode(noteVoice.sourceNode);
+    for (const effectNode of noteVoice.effectNodes ?? []) {
+      disconnectAudioNode(effectNode);
+    }
     disconnectAudioNode(noteVoice.gainNode);
   }
 
@@ -1436,6 +1498,167 @@ function createStretchChannelBuffers(
       : new Float32Array(left);
 
   return [left, right];
+}
+
+function createSynthFilterNode({
+  audioContext,
+  accent,
+  filter,
+  filterEnvelope,
+  durationSeconds,
+  startTime,
+}: {
+  audioContext: BaseAudioContext;
+  accent?: SynthAccentMeta;
+  filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
+  durationSeconds: number;
+  startTime: number;
+}): BiquadFilterNode | null {
+  if (!filter) {
+    return null;
+  }
+
+  const filterNode = audioContext.createBiquadFilter();
+  const baseFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz: filter.frequencyHz,
+    sampleRate: audioContext.sampleRate,
+  });
+
+  filterNode.type = filter.type;
+  filterNode.frequency.setValueAtTime(baseFrequencyHz, startTime);
+  filterNode.Q.setValueAtTime(filter.q ?? 0, startTime);
+
+  if (filterEnvelope) {
+    scheduleSynthFilterEnvelope({
+      accent,
+      durationSeconds,
+      filterEnvelope,
+      frequencyParam: filterNode.frequency,
+      sampleRate: audioContext.sampleRate,
+      startTime,
+      sustainFrequencyHz: filterEnvelope.sustainFrequencyHz ?? baseFrequencyHz,
+    });
+  }
+
+  return filterNode;
+}
+
+function scheduleSynthFilterEnvelope({
+  accent,
+  durationSeconds,
+  filterEnvelope,
+  frequencyParam,
+  sampleRate,
+  startTime,
+  sustainFrequencyHz,
+}: {
+  accent?: SynthAccentMeta;
+  durationSeconds: number;
+  filterEnvelope: SynthFilterEnvelopeMeta;
+  frequencyParam: AudioParam;
+  sampleRate: number;
+  startTime: number;
+  sustainFrequencyHz: number;
+}): void {
+  const attackSeconds = Math.min(
+    filterEnvelope.attackSeconds ?? 0,
+    durationSeconds,
+  );
+  const decaySeconds = Math.min(
+    filterEnvelope.decaySeconds,
+    Math.max(durationSeconds - attackSeconds, 0),
+  );
+  const peakFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz:
+      filterEnvelope.peakFrequencyHz * (accent?.filterPeakMultiplier ?? 1),
+    sampleRate,
+  });
+  const targetSustainFrequencyHz = getSafeSynthFilterFrequency({
+    frequencyHz: sustainFrequencyHz,
+    sampleRate,
+  });
+  const peakTime = startTime + attackSeconds;
+  const decayEndTime = peakTime + decaySeconds;
+
+  if (attackSeconds > 0) {
+    frequencyParam.linearRampToValueAtTime(peakFrequencyHz, peakTime);
+  } else {
+    frequencyParam.setValueAtTime(peakFrequencyHz, startTime);
+  }
+
+  if (decaySeconds > 0) {
+    frequencyParam.exponentialRampToValueAtTime(
+      targetSustainFrequencyHz,
+      decayEndTime,
+    );
+  } else {
+    frequencyParam.setValueAtTime(targetSustainFrequencyHz, peakTime);
+  }
+}
+
+function scheduleSynthPitch({
+  frequencyParam,
+  glide,
+  startTime,
+  targetFrequencyHz,
+}: {
+  frequencyParam: AudioParam;
+  glide?: SynthGlideMeta;
+  startTime: number;
+  targetFrequencyHz: number;
+}): void {
+  if (!glide || glide.timeSeconds <= 0 || glide.startSemitoneOffset === 0) {
+    frequencyParam.setValueAtTime(targetFrequencyHz, startTime);
+    return;
+  }
+
+  const startFrequencyHz =
+    targetFrequencyHz * 2 ** (glide.startSemitoneOffset / 12);
+
+  frequencyParam.setValueAtTime(Math.max(startFrequencyHz, 20), startTime);
+  frequencyParam.exponentialRampToValueAtTime(
+    Math.max(targetFrequencyHz, 20),
+    startTime + glide.timeSeconds,
+  );
+}
+
+function getSynthAccentPeakGainValue({
+  accent,
+  peakGainValue,
+}: {
+  accent?: SynthAccentMeta;
+  peakGainValue: number;
+}): number {
+  return peakGainValue * (accent?.gainMultiplier ?? 1);
+}
+
+function getSynthAccentEndTime({
+  accent,
+  attackEndTime,
+  sustainEndTime,
+}: {
+  accent?: SynthAccentMeta;
+  attackEndTime: number;
+  sustainEndTime: number;
+}): number {
+  if (!accent) {
+    return sustainEndTime;
+  }
+
+  return Math.min(attackEndTime + accent.decaySeconds, sustainEndTime);
+}
+
+function getSafeSynthFilterFrequency({
+  frequencyHz,
+  sampleRate,
+}: {
+  frequencyHz: number;
+  sampleRate: number;
+}): number {
+  const nyquistLimitHz = Math.max(20, sampleRate / 2 - 1);
+
+  return Math.min(Math.max(frequencyHz, 20), nyquistLimitHz);
 }
 
 function midiNoteToFrequency(midiNote: number): number {

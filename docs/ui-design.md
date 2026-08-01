@@ -361,9 +361,14 @@ Do not expose runtime audio state through undo/redo UI. The command should resto
 
 ## Piano Roll Editing
 
-The initial piano roll should use a compact C4-C5 pitch range that matches the bundled Iowa Piano sample files.
+The piano roll pitch range depends on the selected pitched instrument.
 
-- Render 13 pitch rows from C5 down to C4.
+- Oscillator-based instruments should render C7 down to C1 and allow vertical scrolling.
+- Sample-based instruments should render only pitches with available sample zones. The initial `Iowa Piano` renders C5 down to C4 because those are the bundled WAV files.
+- Hide the vertical scrollbar UI where practical while preserving mouse wheel or trackpad vertical scrolling.
+- Keep the visible piano roll note area aligned to 13 pitch rows and snap vertical wheel scrolling to whole pitch-row increments.
+- When opening a clip/instrument piano roll that already has notes, center the earliest visible note pitch in the initial viewport.
+- When opening a clip/instrument piano roll with no notes, show the C4-C5 area by default.
 - Render 32 columns across the 1-bar clip.
 - Use left-click to create a short note.
 - Use left-click drag on empty grid space to create a longer note.

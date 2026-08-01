@@ -480,7 +480,9 @@ Sample IDs use the stable prefix `iowa-piano-` plus the lowercased pitch name, f
 - `C4.wav` -> `iowa-piano-c4`
 - `Db4.wav` -> `iowa-piano-db4`
 
-The piano roll uses these files to define the initial C4-C5 pitch range and keep bundled sample metadata available. `Default Synth` remains the oscillator-based fallback instrument, while `Iowa Piano` uses the bundled WAV files for sample-based note playback.
+`Iowa Piano` uses these files to define its available sample zones. It should only create and play note pitches that have matching bundled WAV sample zones unless a future sampler feature explicitly adds nearest-zone pitch shifting.
+
+Oscillator-based instruments use a wider piano roll editing range from C1 through C7. This range is independent from the Iowa Piano sample range because oscillator instruments can synthesize pitches directly from MIDI note numbers.
 
 ## Pitched Instruments
 
@@ -491,19 +493,40 @@ Initial pitched instrument IDs:
 - `default-synth`: oscillator-based playback. It can hold notes for arbitrary durations.
 - `iowa-piano`: sample-based playback using bundled Iowa Piano WAV files.
 
-Future built-in oscillator instruments should use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects.
+Built-in oscillator instruments use the same pitched instrument list rather than a separate UI concept. They should be represented as serializable synth preset metadata, not as rendered WAV files or runtime Web Audio node objects. Their piano roll editor range is C1-C7 unless a later feature adds user-configurable pitch ranges.
+
+The oscillator preset audition branch currently exposes temporary candidate IDs:
+
+- `audition-sub-bass`.
+- `audition-naive-sawtooth`.
+- `audition-acid-lead`.
+- `audition-soft-pad`.
+- `audition-pluck`.
+
+These IDs should be treated as review candidates until the user selects which presets belong in the final app.
 
 Instrument selection may start as selected-clip or runtime UI state during early M1 work. If it becomes part of saved project behavior, store only serializable IDs and metadata, not runtime audio objects.
 
 Each `NoteEvent` stores the serializable `instrumentId` that owns that note. This allows multiple pitched instruments, such as `Default Synth` and `Iowa Piano`, to have notes at the same tick and pitch inside one hybrid clip and play simultaneously.
 
+Sample-based pitched instruments should not fall back to `Default Synth` when a note has no matching sample zone. Missing sample-zone pitches should be silent so the rendered result reflects the actual available WAV files.
+
 Built-in oscillator synth presets may define oscillator, envelope, and optional filter settings:
 
 ```ts
 export interface SynthPresetMeta {
+  accent?: SynthAccentMeta;
   oscillator: SynthOscillatorMeta;
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
+  glide?: SynthGlideMeta;
+}
+
+export interface SynthAccentMeta {
+  decaySeconds: number;
+  filterPeakMultiplier?: number;
+  gainMultiplier: number;
 }
 
 export interface SynthOscillatorMeta {
@@ -522,6 +545,18 @@ export interface SynthFilterMeta {
   type: "lowpass" | "highpass";
   frequencyHz: number;
   q?: number;
+}
+
+export interface SynthFilterEnvelopeMeta {
+  attackSeconds?: number;
+  decaySeconds: number;
+  peakFrequencyHz: number;
+  sustainFrequencyHz?: number;
+}
+
+export interface SynthGlideMeta {
+  startSemitoneOffset: number;
+  timeSeconds: number;
 }
 ```
 
@@ -593,9 +628,9 @@ Current Iowa Piano sample zones include explicit `forward-loop` sustain metadata
 
 ## Initial Piano Roll Implementation
 
-The initial piano roll stores note events directly in the selected hybrid clip's `noteEvents` array. Notes are serializable data:
+The piano roll stores note events directly in the selected hybrid clip's `noteEvents` array. Notes are serializable data:
 
-- `midiNote`: MIDI note number, initially C4 through C5.
+- `midiNote`: MIDI note number. Oscillator instruments initially expose C1 through C7 in the editor. `Iowa Piano` initially exposes only C4 through C5 because those are the bundled sample files.
 - `instrumentId`: pitched instrument that owns and plays the note.
 - `startTick`: note start position inside the clip.
 - `durationTicks`: note length.

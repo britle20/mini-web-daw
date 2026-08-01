@@ -2,6 +2,8 @@ import {
   type CSSProperties,
   type MouseEvent,
   type PointerEvent,
+  type WheelEvent as ReactWheelEvent,
+  useCallback,
   useRef,
   useState,
 } from "react";
@@ -9,12 +11,12 @@ import {
 import { Panel } from "../../components";
 import {
   PIANO_ROLL_COLUMNS_PER_BAR,
-  PIANO_ROLL_PITCHES,
   TICKS_PER_PIANO_ROLL_COLUMN,
   getHybridClipBarCount,
   getPianoRollColumnCount,
   getPianoRollPitchByMidiNote,
   type NoteEvent,
+  type PianoRollPitch,
 } from "../../model";
 import { type Tick } from "../../utils";
 import { PianoKeyboard } from "./PianoKeyboard";
@@ -24,6 +26,7 @@ interface PianoRollProps {
   clipLengthTicks: Tick;
   instrumentName: string;
   noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
   playheadTick: Tick;
   shouldShowPlayhead: boolean;
   onNoteCreate: (note: {
@@ -66,19 +69,18 @@ interface NoteGeometry {
   rowIndex: number;
 }
 
-const pianoRows = PIANO_ROLL_PITCHES.map((pitch) => ({
-  id: `midi-${pitch.midiNote}`,
-  keyType: pitch.keyType,
-  label: pitch.label,
-}));
-
 const BEATS_PER_BAR = 4;
 const PIANO_ROLL_COLUMNS_PER_BEAT = PIANO_ROLL_COLUMNS_PER_BAR / BEATS_PER_BAR;
+const WHEEL_DELTA_LINE_MODE = 1;
+const WHEEL_DELTA_PAGE_MODE = 2;
+const EMPTY_ROLL_DEFAULT_LOW_MIDI_NOTE = 60;
+const EMPTY_ROLL_DEFAULT_HIGH_MIDI_NOTE = 72;
 
 export function PianoRoll({
   clipLengthTicks,
   instrumentName,
   noteEvents,
+  pitches,
   playheadTick,
   shouldShowPlayhead,
   onNoteCreate,
@@ -86,9 +88,18 @@ export function PianoRoll({
   onNoteMove,
 }: PianoRollProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const verticalWheelRemainderRef = useRef(0);
   const [draftNote, setDraftNote] = useState<DraftNote | null>(null);
   const [movingNote, setMovingNote] = useState<MovingNote | null>(null);
   const [gridScrollTop, setGridScrollTop] = useState(0);
+  const [initialCenteredRowIndex] = useState(() =>
+    getInitialCenteredRowIndex({ noteEvents, pitches }),
+  );
+  const pianoRows = pitches.map((pitch) => ({
+    id: `midi-${pitch.midiNote}`,
+    keyType: pitch.keyType,
+    label: pitch.label,
+  }));
   const barCount = getHybridClipBarCount(clipLengthTicks);
   const beatCount = barCount * BEATS_PER_BAR;
   const columnCount = getPianoRollColumnCount(clipLengthTicks);
@@ -103,6 +114,85 @@ export function PianoRoll({
     gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
     width: `calc(100% * ${barCount})`,
   } as CSSProperties;
+  const handleGridViewportRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element || initialCenteredRowIndex === null) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        const gridElement = gridRef.current;
+
+        if (!gridElement) {
+          return;
+        }
+
+        const rowHeight =
+          gridElement.getBoundingClientRect().height / Math.max(pitches.length, 1);
+        const headerHeight =
+          element
+            .querySelector(`.${styles.beatHeader}`)
+            ?.getBoundingClientRect().height ?? 0;
+        const visibleNoteHeight = Math.max(
+          element.clientHeight - headerHeight,
+          rowHeight,
+        );
+        const centeredScrollTop =
+          rowHeight * (initialCenteredRowIndex + 0.5) - visibleNoteHeight / 2;
+        const nextScrollTop = clamp(
+          snapScrollTopToRow(centeredScrollTop, rowHeight),
+          0,
+          Math.max(element.scrollHeight - element.clientHeight, 0),
+        );
+
+        element.scrollTop = nextScrollTop;
+        setGridScrollTop(nextScrollTop);
+      });
+    },
+    [initialCenteredRowIndex, pitches.length],
+  );
+
+  function handleGridViewportWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    const gridElement = gridRef.current;
+
+    if (
+      !gridElement ||
+      event.ctrlKey ||
+      Math.abs(event.deltaY) <= Math.abs(event.deltaX)
+    ) {
+      return;
+    }
+
+    const rowHeight = getRenderedRowHeight(gridElement, pitches.length);
+
+    if (rowHeight <= 0) {
+      return;
+    }
+
+    event.preventDefault();
+    verticalWheelRemainderRef.current += getWheelDeltaPixels(event, rowHeight);
+
+    const rowDelta = Math.trunc(verticalWheelRemainderRef.current / rowHeight);
+
+    if (rowDelta === 0) {
+      return;
+    }
+
+    verticalWheelRemainderRef.current -= rowDelta * rowHeight;
+
+    const viewportElement = event.currentTarget;
+    const nextScrollTop = clamp(
+      snapScrollTopToRow(
+        viewportElement.scrollTop + rowDelta * rowHeight,
+        rowHeight,
+      ),
+      0,
+      Math.max(viewportElement.scrollHeight - viewportElement.clientHeight, 0),
+    );
+
+    viewportElement.scrollTop = nextScrollTop;
+    setGridScrollTop(nextScrollTop);
+  }
 
   function handleGridPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (event.button !== 0) {
@@ -147,7 +237,7 @@ export function PianoRoll({
     }
 
     const draftGeometry = getDraftNoteGeometry(draftNote);
-    const pitch = PIANO_ROLL_PITCHES[draftGeometry.rowIndex];
+    const pitch = pitches[draftGeometry.rowIndex];
 
     if (pitch) {
       onNoteCreate({
@@ -177,7 +267,7 @@ export function PianoRoll({
     }
 
     const gridPosition = getGridPosition(event);
-    const noteGeometry = getNoteGeometry(note, columnCount);
+    const noteGeometry = getNoteGeometry(note, columnCount, pitches);
 
     if (!gridPosition || !noteGeometry) {
       return;
@@ -226,7 +316,7 @@ export function PianoRoll({
       return;
     }
 
-    const pitch = PIANO_ROLL_PITCHES[movingNote.currentRowIndex];
+    const pitch = pitches[movingNote.currentRowIndex];
 
     if (pitch) {
       onNoteMove({
@@ -264,10 +354,14 @@ export function PianoRoll({
       return null;
     }
 
+    if (pitches.length === 0) {
+      return null;
+    }
+
     const rect = gridElement.getBoundingClientRect();
     const x = clamp(event.clientX - rect.left, 0, rect.width - 1);
     const y = clamp(event.clientY - rect.top, 0, rect.height - 1);
-    const rowHeight = rect.height / PIANO_ROLL_PITCHES.length;
+    const rowHeight = rect.height / pitches.length;
 
     return {
       columnIndex: clamp(
@@ -278,12 +372,12 @@ export function PianoRoll({
       rowIndex: clamp(
         Math.floor(y / rowHeight),
         0,
-        PIANO_ROLL_PITCHES.length - 1,
+        pitches.length - 1,
       ),
     };
   }
 
-  const gridHeight = `calc(var(--piano-row-height) * ${PIANO_ROLL_PITCHES.length})`;
+  const gridHeight = `calc(var(--piano-row-height) * ${pitches.length})`;
   const movingNoteId = movingNote?.noteId ?? null;
 
   return (
@@ -306,6 +400,8 @@ export function PianoRoll({
           <div
             className={styles.gridViewport}
             onScroll={(event) => setGridScrollTop(event.currentTarget.scrollTop)}
+            onWheel={handleGridViewportWheel}
+            ref={handleGridViewportRef}
           >
             <div
               className={styles.beatHeader}
@@ -342,13 +438,16 @@ export function PianoRoll({
                         durationColumns: movingNote.durationColumns,
                         rowIndex: movingNote.currentRowIndex,
                       }
-                    : getNoteGeometry(note, columnCount);
+                    : getNoteGeometry(note, columnCount, pitches);
 
                 if (!noteGeometry) {
                   return null;
                 }
 
-                const pitch = getPianoRollPitchByMidiNote(note.midiNote);
+                const pitch = getPianoRollPitchByMidiNote(
+                  note.midiNote,
+                  pitches,
+                );
                 const noteLabel = pitch?.label ?? `MIDI ${note.midiNote}`;
 
                 return (
@@ -379,7 +478,7 @@ export function PianoRoll({
                     columnCount,
                   )}
                 >
-                  {PIANO_ROLL_PITCHES[draftNote.rowIndex]?.label}
+                  {pitches[draftNote.rowIndex]?.label}
                 </div>
               ) : null}
 
@@ -416,8 +515,9 @@ function getDraftNoteGeometry(draftNote: DraftNote): NoteGeometry {
 function getNoteGeometry(
   note: NoteEvent,
   columnCount: number,
+  pitches: readonly PianoRollPitch[],
 ): NoteGeometry | null {
-  const rowIndex = PIANO_ROLL_PITCHES.findIndex(
+  const rowIndex = pitches.findIndex(
     (pitch) => pitch.midiNote === note.midiNote,
   );
 
@@ -438,6 +538,111 @@ function getNoteGeometry(
     ),
     rowIndex,
   };
+}
+
+function getInitialCenteredRowIndex({
+  noteEvents,
+  pitches,
+}: {
+  noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
+}): number | null {
+  return (
+    getFirstVisibleNoteRowIndex({ noteEvents, pitches }) ??
+    getEmptyRollDefaultRowIndex(pitches)
+  );
+}
+
+function getFirstVisibleNoteRowIndex({
+  noteEvents,
+  pitches,
+}: {
+  noteEvents: readonly NoteEvent[];
+  pitches: readonly PianoRollPitch[];
+}): number | null {
+  let firstNote: NoteEvent | null = null;
+  let firstNoteRowIndex: number | null = null;
+
+  for (const note of noteEvents) {
+    const rowIndex = pitches.findIndex(
+      (pitch) => pitch.midiNote === note.midiNote,
+    );
+
+    if (rowIndex < 0) {
+      continue;
+    }
+
+    if (
+      !firstNote ||
+      note.startTick < firstNote.startTick ||
+      (note.startTick === firstNote.startTick && note.midiNote > firstNote.midiNote)
+    ) {
+      firstNote = note;
+      firstNoteRowIndex = rowIndex;
+    }
+  }
+
+  return firstNoteRowIndex;
+}
+
+function getEmptyRollDefaultRowIndex(
+  pitches: readonly PianoRollPitch[],
+): number | null {
+  if (pitches.length === 0) {
+    return null;
+  }
+
+  const defaultCenterMidiNote =
+    (EMPTY_ROLL_DEFAULT_LOW_MIDI_NOTE + EMPTY_ROLL_DEFAULT_HIGH_MIDI_NOTE) / 2;
+  let closestPitchIndex = 0;
+  let closestDistance = Math.abs(pitches[0]!.midiNote - defaultCenterMidiNote);
+
+  for (let pitchIndex = 1; pitchIndex < pitches.length; pitchIndex += 1) {
+    const distance = Math.abs(
+      pitches[pitchIndex]!.midiNote - defaultCenterMidiNote,
+    );
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestPitchIndex = pitchIndex;
+    }
+  }
+
+  return closestPitchIndex;
+}
+
+function getRenderedRowHeight(
+  gridElement: HTMLElement,
+  pitchCount: number,
+): number {
+  if (pitchCount <= 0) {
+    return 0;
+  }
+
+  return gridElement.getBoundingClientRect().height / pitchCount;
+}
+
+function getWheelDeltaPixels(
+  event: ReactWheelEvent<HTMLElement>,
+  rowHeight: number,
+): number {
+  if (event.deltaMode === WHEEL_DELTA_LINE_MODE) {
+    return event.deltaY * rowHeight;
+  }
+
+  if (event.deltaMode === WHEEL_DELTA_PAGE_MODE) {
+    return event.deltaY * rowHeight * 13;
+  }
+
+  return event.deltaY;
+}
+
+function snapScrollTopToRow(scrollTop: number, rowHeight: number): number {
+  if (rowHeight <= 0) {
+    return scrollTop;
+  }
+
+  return Math.round(scrollTop / rowHeight) * rowHeight;
 }
 
 function getNoteStyle({

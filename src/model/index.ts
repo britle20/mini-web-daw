@@ -33,6 +33,7 @@ export {
   DRUM_STEPS_PER_BAR,
   DRUM_STEP_SUBDIVISIONS,
   HYBRID_CLIP_LENGTH_BARS,
+  IOWA_PIANO_SAMPLE_PITCHES,
   INITIAL_PITCHED_INSTRUMENT_IDS,
   PIANO_ROLL_COLUMN_COUNT,
   PIANO_ROLL_COLUMNS_PER_BAR,
@@ -41,6 +42,7 @@ export {
   addPitchedInstrumentToClip,
   addNoteEvent,
   createEmptyHybridClip,
+  createPianoRollPitchFromMidiNote,
   deleteNoteEvent,
   getDrumSubstepStartTick,
   getDrumSubstepTicks,
@@ -123,12 +125,20 @@ export {
   updateTrackMixerState,
 } from "./mixer";
 export {
+  AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_NAIVE_SAW_INSTRUMENT,
+  AUDITION_PLUCK_INSTRUMENT,
+  AUDITION_SOFT_PAD_INSTRUMENT,
+  AUDITION_SUB_BASS_INSTRUMENT,
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_SYNTH_INSTRUMENT,
+  DEFAULT_SYNTH_PRESET,
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
+  getPianoRollPitchesForInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
 } from "./pitched-instruments";
 export type {
   ArrangementTrack,
@@ -147,6 +157,7 @@ export type {
   HybridClipLengthBars,
   NoteEvent,
   PianoRollPitch,
+  PianoRollSamplePitch,
 } from "./drum-clip";
 export type {
   AudioClip,
@@ -172,4 +183,12 @@ export type {
   SamplerEnvelopeMeta,
   SamplerSustainMeta,
   SampleZone,
+  SynthAccentMeta,
+  SynthEnvelopeMeta,
+  SynthFilterEnvelopeMeta,
+  SynthFilterMeta,
+  SynthGlideMeta,
+  SynthOscillatorMeta,
+  SynthPresetMeta,
+  SynthOscillatorType,
 } from "./pitched-instruments";

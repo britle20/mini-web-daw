@@ -4,7 +4,7 @@ Related issue: #17
 
 ## Status
 
-Planned
+In review: candidate audition
 
 ## Goal
 
@@ -34,6 +34,8 @@ Included:
 - Play selected preset notes from piano roll `PAT` playback.
 - Play selected preset notes from arrangement `SONG` playback.
 - Include selected preset notes in arrangement WAV export.
+- Let oscillator-based synth presets use the wider C1-C7 piano roll range because their pitches are generated directly from MIDI note numbers.
+- Keep sample-based instruments limited to their available sample zones in the piano roll. The current `Iowa Piano` remains C4-C5 only.
 - Add focused tests for preset metadata, instrument lookup, and scheduling/export routing where practical.
 
 Excluded:
@@ -68,21 +70,52 @@ Recommended candidate families:
 
 The final PR should document which candidates were accepted and remove rejected candidates from production UI and model lists.
 
+Current audition candidates exposed by the implementation branch:
+
+- `audition-sub-bass`: triangle oscillator with a low-pass filter and stable low-frequency envelope.
+- `audition-naive-sawtooth`: plain sawtooth oscillator with only a simple amplitude envelope.
+- `audition-acid-lead`: sawtooth oscillator with resonant low-pass cutoff sweep, per-note glide, and accent-style transient.
+- `audition-soft-pad`: sine oscillator with slower attack/release and a muted low-pass filter.
+- `audition-pluck`: square oscillator with a short pluck-style envelope.
+
+These candidate IDs are temporary review names. Before the feature is considered complete, rejected candidates should be removed and accepted candidates should be renamed if needed.
+
 ## Data Model Notes
 
 Built-in synth presets should be represented as serializable metadata, for example:
 
 ```ts
 export interface SynthPresetMeta {
+  accent?: SynthAccentMeta;
   envelope: SynthEnvelopeMeta;
   filter?: SynthFilterMeta;
+  filterEnvelope?: SynthFilterEnvelopeMeta;
+  glide?: SynthGlideMeta;
   oscillator: SynthOscillatorMeta;
+}
+
+export interface SynthAccentMeta {
+  decaySeconds: number;
+  filterPeakMultiplier?: number;
+  gainMultiplier: number;
 }
 
 export interface SynthOscillatorMeta {
   type: "sine" | "square" | "sawtooth" | "triangle";
   detuneCents?: number;
   gain?: number;
+}
+
+export interface SynthFilterEnvelopeMeta {
+  attackSeconds?: number;
+  decaySeconds: number;
+  peakFrequencyHz: number;
+  sustainFrequencyHz?: number;
+}
+
+export interface SynthGlideMeta {
+  startSemitoneOffset: number;
+  timeSeconds: number;
 }
 ```
 
@@ -98,6 +131,8 @@ Implementation may refine names and fields, but any model semantics must be refl
 - Piano roll notes owned by selected presets play in `PAT` playback.
 - Arrangement playback includes selected preset notes in `SONG` mode.
 - Arrangement WAV export includes selected preset notes.
+- Oscillator-based candidates expose C1-C7 note rows in the piano roll with vertical scrolling.
+- `Iowa Piano` only exposes its C4-C5 sample-backed notes in the piano roll.
 - Existing sample-based `Iowa Piano` behavior remains intact.
 
 ## Verification

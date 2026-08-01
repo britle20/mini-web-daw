@@ -107,6 +107,9 @@
   --piano-key-width: var(--primitive-space-16);
   --piano-row-height: var(--primitive-space-8);
   --piano-ruler-height: var(--primitive-space-6);
+  --piano-visible-row-count: 13;
+  --piano-visible-rows-height: calc(var(--piano-row-height) * var(--piano-visible-row-count));
+  --piano-editor-viewport-height: calc(var(--piano-ruler-height) + var(--piano-visible-rows-height));
   --piano-roll-grid-height: 256px;
   --piano-step-width: var(--primitive-grid-fraction-32);
   --piano-beat-width: var(--primitive-grid-fraction-4);

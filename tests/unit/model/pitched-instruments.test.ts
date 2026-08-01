@@ -1,25 +1,39 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AUDITION_ACID_LEAD_INSTRUMENT,
+  AUDITION_NAIVE_SAW_INSTRUMENT,
+  AUDITION_PLUCK_INSTRUMENT,
+  AUDITION_SOFT_PAD_INSTRUMENT,
+  AUDITION_SUB_BASS_INSTRUMENT,
   DEFAULT_PITCHED_INSTRUMENT_ID,
   DEFAULT_SYNTH_INSTRUMENT,
+  DEFAULT_SYNTH_PRESET,
   IOWA_PIANO_INSTRUMENT,
   PITCHED_INSTRUMENTS,
   getPitchedInstrument,
+  getPianoRollPitchesForInstrument,
   getSampleZoneForMidiNote,
+  getSynthPresetForInstrument,
 } from "../../../src/model";
 
 describe("pitched instruments", () => {
-  it("defines Default Synth and Iowa Piano as serializable metadata", () => {
+  it("defines Default Synth, audition synths, and Iowa Piano as serializable metadata", () => {
     expect(DEFAULT_PITCHED_INSTRUMENT_ID).toBe("default-synth");
     expect(PITCHED_INSTRUMENTS).toEqual([
       DEFAULT_SYNTH_INSTRUMENT,
       IOWA_PIANO_INSTRUMENT,
+      AUDITION_SUB_BASS_INSTRUMENT,
+      AUDITION_NAIVE_SAW_INSTRUMENT,
+      AUDITION_ACID_LEAD_INSTRUMENT,
+      AUDITION_SOFT_PAD_INSTRUMENT,
+      AUDITION_PLUCK_INSTRUMENT,
     ]);
     expect(DEFAULT_SYNTH_INSTRUMENT).toEqual({
       id: "default-synth",
       kind: "synth",
       name: "Default Synth",
+      synthPreset: DEFAULT_SYNTH_PRESET,
     });
     expect(IOWA_PIANO_INSTRUMENT).toMatchObject({
       id: "iowa-piano",
@@ -79,12 +93,109 @@ describe("pitched instruments", () => {
 
   it("looks up pitched instruments by ID", () => {
     expect(getPitchedInstrument("default-synth")).toBe(DEFAULT_SYNTH_INSTRUMENT);
+    expect(getPitchedInstrument("audition-sub-bass")).toBe(
+      AUDITION_SUB_BASS_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-naive-sawtooth")).toBe(
+      AUDITION_NAIVE_SAW_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-acid-lead")).toBe(
+      AUDITION_ACID_LEAD_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-soft-pad")).toBe(
+      AUDITION_SOFT_PAD_INSTRUMENT,
+    );
+    expect(getPitchedInstrument("audition-pluck")).toBe(
+      AUDITION_PLUCK_INSTRUMENT,
+    );
     expect(getPitchedInstrument("iowa-piano")).toBe(IOWA_PIANO_INSTRUMENT);
   });
 
+  it("uses wide synth pitches and exact sample pitches for piano roll editing", () => {
+    const synthPitches =
+      getPianoRollPitchesForInstrument(AUDITION_SUB_BASS_INSTRUMENT);
+    const iowaPianoPitches =
+      getPianoRollPitchesForInstrument(IOWA_PIANO_INSTRUMENT);
+
+    expect(synthPitches).toHaveLength(73);
+    expect(synthPitches[0]).toMatchObject({ label: "C7", midiNote: 96 });
+    expect(synthPitches.at(-1)).toMatchObject({ label: "C1", midiNote: 24 });
+    expect(iowaPianoPitches).toHaveLength(13);
+    expect(iowaPianoPitches[0]).toMatchObject({
+      label: "C5",
+      midiNote: 72,
+      sampleId: "iowa-piano-c5",
+    });
+    expect(iowaPianoPitches.at(-1)).toMatchObject({
+      label: "C4",
+      midiNote: 60,
+      sampleId: "iowa-piano-c4",
+    });
+  });
+
+  it("resolves synth preset metadata for oscillator instruments", () => {
+    expect(getSynthPresetForInstrument(DEFAULT_SYNTH_INSTRUMENT)).toEqual({
+      envelope: {
+        attackSeconds: 0.01,
+        releaseSeconds: 0.04,
+        sustainGain: 1,
+      },
+      oscillator: {
+        gain: 1,
+        type: "triangle",
+      },
+    });
+    expect(getSynthPresetForInstrument(AUDITION_NAIVE_SAW_INSTRUMENT)).toEqual(
+      {
+        envelope: {
+          attackSeconds: 0.006,
+          releaseSeconds: 0.06,
+          sustainGain: 0.9,
+        },
+        oscillator: {
+          gain: 0.72,
+          type: "sawtooth",
+        },
+      },
+    );
+    expect(
+      getSynthPresetForInstrument(AUDITION_ACID_LEAD_INSTRUMENT),
+    ).toMatchObject({
+      accent: {
+        decaySeconds: 0.08,
+        filterPeakMultiplier: 1.35,
+        gainMultiplier: 1.55,
+      },
+      envelope: {
+        attackSeconds: 0.002,
+        releaseSeconds: 0.045,
+        sustainGain: 0.42,
+      },
+      filter: {
+        frequencyHz: 520,
+        q: 12,
+        type: "lowpass",
+      },
+      filterEnvelope: {
+        attackSeconds: 0.004,
+        decaySeconds: 0.16,
+        peakFrequencyHz: 4200,
+        sustainFrequencyHz: 520,
+      },
+      glide: {
+        startSemitoneOffset: -7,
+        timeSeconds: 0.055,
+      },
+      oscillator: {
+        gain: 0.74,
+        type: "sawtooth",
+      },
+    });
+  });
+
   it("keeps pitched instrument metadata JSON serializable", () => {
-    expect(JSON.parse(JSON.stringify(IOWA_PIANO_INSTRUMENT))).toEqual(
-      IOWA_PIANO_INSTRUMENT,
+    expect(JSON.parse(JSON.stringify(PITCHED_INSTRUMENTS))).toEqual(
+      PITCHED_INSTRUMENTS,
     );
   });
 });
